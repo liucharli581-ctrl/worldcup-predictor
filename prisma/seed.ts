@@ -1,7 +1,9 @@
+import "dotenv/config"
+import { PrismaPg } from "@prisma/adapter-pg"
 import { PrismaClient } from "../src/generated/prisma/client"
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3"
 
-const prisma = new PrismaClient({ adapter: new PrismaBetterSqlite3({ url: "file:./dev.db" }) })
+const connectionString = process.env.DATABASE_URL!
+const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) })
 
 // Tier-based stat generators
 type Tier = "elite" | "strong" | "medium" | "weak" | "minnow"

@@ -1,14 +1,11 @@
+import "dotenv/config"
+import { PrismaPg } from "@prisma/adapter-pg"
 import { PrismaClient } from "../src/generated/prisma/client"
-import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3"
-import { resolve } from "path"
 
-const adapter = new PrismaBetterSqlite3({ url: `file:${resolve(process.cwd(), "dev.db")}` })
-const prisma = new PrismaClient({ adapter })
+const connectionString = process.env.DATABASE_URL!
+const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) })
 
-// Historical World Cup head-to-head data
-// Format: [homeTeamFifaCode, awayTeamFifaCode, date, competition, stage, homeScore, awayScore]
-const HISTORICAL_MATCHES: [string, string, string, string, string, number, number][] = [
-  // 2018 World Cup
+const HISTORICAL_MATCHES = [
   ["RUS", "KSA", "2018-06-14", "World Cup 2018", "Group Stage", 5, 0],
   ["EGY", "URU", "2018-06-15", "World Cup 2018", "Group Stage", 0, 1],
   ["MAR", "IRN", "2018-06-15", "World Cup 2018", "Group Stage", 0, 1],
@@ -43,8 +40,6 @@ const HISTORICAL_MATCHES: [string, string, string, string, string, number, numbe
   ["FRA", "BEL", "2018-07-10", "World Cup 2018", "Semi-finals", 1, 0],
   ["CRO", "ENG", "2018-07-11", "World Cup 2018", "Semi-finals", 2, 1],
   ["FRA", "CRO", "2018-07-15", "World Cup 2018", "Final", 4, 2],
-
-  // 2022 World Cup
   ["QAT", "ECU", "2022-11-20", "World Cup 2022", "Group Stage", 0, 2],
   ["ENG", "IRN", "2022-11-21", "World Cup 2022", "Group Stage", 6, 2],
   ["SEN", "NED", "2022-11-21", "World Cup 2022", "Group Stage", 0, 2],
@@ -100,49 +95,29 @@ const HISTORICAL_MATCHES: [string, string, string, string, string, number, numbe
 async function main() {
   console.log("Seeding head-to-head data...")
 
-  // Get all teams mapped by fifaCode
-  const allTeams = await prisma.team.findMany()
-  const teamByCode = new Map(allTeams.map((t) => [t.fifaCode, t]))
+  const teams = await prisma.team.findMany({ select: { id: true, name: true, fifaCode: true } })
+  const teamByCode = new Map(teams.filter(t => t.fifaCode).map(t => [t.fifaCode as string, t]))
 
-  // Clear existing H2H
   await prisma.headToHead.deleteMany()
 
   let count = 0
   for (const [homeCode, awayCode, dateStr, competition, stage, homeScore, awayScore] of HISTORICAL_MATCHES) {
     const home = teamByCode.get(homeCode)
     const away = teamByCode.get(awayCode)
-
-    if (!home) {
-      console.log(`  Skipping: ${homeCode} not found in DB`)
-      continue
-    }
-    if (!away) {
-      console.log(`  Skipping: ${awayCode} not found in DB`)
-      continue
-    }
-
+    if (!home) { console.log("  Skipping: " + homeCode + " not found"); continue }
+    if (!away) { console.log("  Skipping: " + awayCode + " not found"); continue }
     await prisma.headToHead.create({
       data: {
-        homeTeamId: home.id,
-        awayTeamId: away.id,
-        homeTeamName: home.name,
-        awayTeamName: away.name,
-        matchDate: new Date(dateStr),
-        competition,
-        stage,
-        homeScore,
-        awayScore,
+        homeTeamId: home.id, awayTeamId: away.id,
+        homeTeamName: home.name, awayTeamName: away.name,
+        matchDate: new Date(dateStr), competition, stage,
+        homeScore, awayScore,
       },
     })
     count++
   }
-
-  console.log(`Seeded ${count} historical head-to-head records`)
+  console.log("Seeded " + count + " historical head-to-head records")
 }
 
-main()
-  .catch((e) => {
-    console.error(e)
-    process.exit(1)
-  })
+main().catch((e) => { console.error(e); process.exit(1) })
   .finally(() => prisma.$disconnect())
