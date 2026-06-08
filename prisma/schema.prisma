@@ -1,0 +1,173 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Team {
+  id                   String   @id @default(cuid())
+  name                 String   @unique
+  fifaCode             String?  @map("fifa_code")
+  country              String?
+  fifaRanking          Int?     @map("fifa_ranking")
+  eloRating            Float?   @map("elo_rating")
+  worldCupAppearances  Int?     @default(0) @map("world_cup_appearances")
+  worldCupTitles       Int?     @default(0) @map("world_cup_titles")
+  bestWorldCupResult   String?  @map("best_world_cup_result")
+  totalMatches         Int?     @default(0) @map("total_matches")
+  totalWins            Int?     @default(0) @map("total_wins")
+  totalDraws           Int?     @default(0) @map("total_draws")
+  totalLosses          Int?     @default(0) @map("total_losses")
+  goalsFor             Int?     @default(0) @map("goals_for")
+  goalsAgainst         Int?     @default(0) @map("goals_against")
+  recent5Wins          Int?     @default(0) @map("recent_5_wins")
+  recent5Draws         Int?     @default(0) @map("recent_5_draws")
+  recent5Losses        Int?     @default(0) @map("recent_5_losses")
+  recent10Wins         Int?     @default(0) @map("recent_10_wins")
+  recent10Draws        Int?     @default(0) @map("recent_10_draws")
+  recent10Losses       Int?     @default(0) @map("recent_10_losses")
+  avgGoalsFor          Float?   @default(0) @map("avg_goals_for")
+  avgGoalsAgainst      Float?   @default(0) @map("avg_goals_against")
+  injuryScore          Float?   @default(0) @map("injury_score")
+  groupName            String?  @map("group_name")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  homeMatches   Match[]       @relation("homeTeam")
+  awayMatches   Match[]       @relation("awayTeam")
+  h2hHomeMatches HeadToHead[] @relation("h2hHomeTeam")
+  h2hAwayMatches HeadToHead[] @relation("h2hAwayTeam")
+
+  @@map("teams")
+}
+
+model Match {
+  id              String    @id @default(cuid())
+  competition     String?
+  matchStage      String?   @map("match_stage")
+  matchDate       DateTime  @map("match_date")
+  homeTeamId      String    @map("home_team_id")
+  awayTeamId      String    @map("away_team_id")
+  neutralGround   Boolean   @default(false) @map("neutral_ground")
+  status          String    @default("scheduled")
+  actualHomeScore Int?      @map("actual_home_score")
+  actualAwayScore Int?      @map("actual_away_score")
+  actualResult    String?   @map("actual_result")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  homeTeam Team         @relation("homeTeam", fields: [homeTeamId], references: [id])
+  awayTeam Team         @relation("awayTeam", fields: [awayTeamId], references: [id])
+  odds     OddsRecord[]
+  predictions Prediction[]
+  simulations VirtualSimulation[]
+  reviews ModelReview[]
+
+  @@map("matches")
+}
+
+model OddsRecord {
+  id              String   @id @default(cuid())
+  matchId         String   @map("match_id")
+  bookmaker       String
+  initialHomeWin  Float    @map("initial_home_win")
+  initialDraw     Float    @map("initial_draw")
+  initialAwayWin  Float    @map("initial_away_win")
+  currentHomeWin  Float    @map("current_home_win")
+  currentDraw     Float    @map("current_draw")
+  currentAwayWin  Float    @map("current_away_win")
+  homeChange      Float?   @map("home_change")
+  drawChange      Float?   @map("draw_change")
+  awayChange      Float?   @map("away_change")
+  homeChangeRate  Float?   @map("home_change_rate")
+  drawChangeRate  Float?   @map("draw_change_rate")
+  awayChangeRate  Float?   @map("away_change_rate")
+  isMajorBookmaker Boolean @default(false) @map("is_major_bookmaker")
+  isAbnormal      Boolean  @default(false) @map("is_abnormal")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  match Match @relation(fields: [matchId], references: [id])
+
+  @@map("odds_records")
+}
+
+model Prediction {
+  id                  String   @id @default(cuid())
+  matchId             String   @map("match_id")
+  modelVersion        String?  @map("model_version")
+  homeBaseScore       Float?   @map("home_base_score")
+  awayBaseScore       Float?   @map("away_base_score")
+  marketScore         Float?   @map("market_score")
+  homeWinProbability   Float   @map("home_win_probability")
+  drawProbability     Float   @map("draw_probability")
+  awayWinProbability  Float   @map("away_win_probability")
+  mainDirection       String?  @map("main_direction")
+  confidence          String?
+  riskLevel           String?  @map("risk_level")
+  riskReasons         String?  @map("risk_reasons")
+  reportText          String?  @map("report_text")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  match       Match               @relation(fields: [matchId], references: [id])
+  simulations VirtualSimulation[]
+  reviews     ModelReview[]
+
+  @@map("predictions")
+}
+
+model VirtualSimulation {
+  id                  String   @id @default(cuid())
+  matchId             String   @map("match_id")
+  predictionId        String   @map("prediction_id")
+  virtualBankroll     Float    @map("virtual_bankroll")
+  suggestedMinAmount  Float    @map("suggested_min_amount")
+  suggestedMaxAmount  Float    @map("suggested_max_amount")
+  riskLevel           String?  @map("risk_level")
+  simulationNote      String?  @map("simulation_note")
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  match      Match      @relation(fields: [matchId], references: [id])
+  prediction Prediction @relation(fields: [predictionId], references: [id])
+
+  @@map("virtual_simulations")
+}
+
+model HeadToHead {
+  id           String   @id @default(cuid())
+  homeTeamId   String   @map("home_team_id")
+  awayTeamId   String   @map("away_team_id")
+  homeTeamName String   @map("home_team_name")
+  awayTeamName String   @map("away_team_name")
+  matchDate    DateTime @map("match_date")
+  competition  String?
+  stage        String?
+  homeScore    Int      @map("home_score")
+  awayScore    Int      @map("away_score")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  homeTeam Team @relation("h2hHomeTeam", fields: [homeTeamId], references: [id])
+  awayTeam Team @relation("h2hAwayTeam", fields: [awayTeamId], references: [id])
+
+  @@map("head_to_head")
+}
+
+model ModelReview {
+  id               String   @id @default(cuid())
+  matchId          String   @map("match_id")
+  predictionId     String   @map("prediction_id")
+  actualResult     String?  @map("actual_result")
+  predictedResult  String?  @map("predicted_result")
+  predictionHit    Boolean? @map("prediction_hit")
+  probabilityError Float?   @map("probability_error")
+  reviewSummary    String?  @map("review_summary")
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  match      Match      @relation(fields: [matchId], references: [id])
+  prediction Prediction @relation(fields: [predictionId], references: [id])
+
+  @@map("model_reviews")
+}
