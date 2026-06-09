@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server"
 import { prisma } from "@/lib/prisma"
 import { apiSuccess, apiError } from "@/lib/api-response"
+import { analyzeH2H } from "@/lib/analysis"
+import type { H2HRecord } from "@/lib/analysis"
 
 export async function GET(
   _request: NextRequest,
@@ -24,27 +26,27 @@ export async function GET(
         ],
       },
       orderBy: { matchDate: "desc" },
-      take: 10,
+      take: 20,
     })
 
     // Normalize so homeTeamName is always the home side in the record
-    const normalized = records.map((r) => {
+    const normalized: H2HRecord[] = records.map((r) => {
       const isSwapped =
         r.homeTeamId === match.awayTeamId &&
         r.awayTeamId === match.homeTeamId
       return {
-        id: r.id,
         homeTeamName: isSwapped ? r.awayTeamName : r.homeTeamName,
         awayTeamName: isSwapped ? r.homeTeamName : r.awayTeamName,
         homeScore: isSwapped ? r.awayScore : r.homeScore,
         awayScore: isSwapped ? r.homeScore : r.awayScore,
-        matchDate: r.matchDate,
+        matchDate: r.matchDate.toISOString(),
         competition: r.competition,
-        stage: r.stage,
       }
     })
 
-    return apiSuccess(normalized)
+    const analysis = analyzeH2H(normalized)
+
+    return apiSuccess({ records: normalized, analysis })
   } catch (error) {
     const message = error instanceof Error ? error.message : "获取历史交锋数据失败"
     return apiError(message, 500)

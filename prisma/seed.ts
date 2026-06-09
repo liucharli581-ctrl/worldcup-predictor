@@ -320,6 +320,65 @@ async function main() {
   }
 
   console.log(`✅ ${oddsCount} 条赔率数据创建完成`)
+
+  console.log("🎯 创建准确比分赔率...")
+  let csCount = 0
+
+  async function seedCorrectScores(matchKey: string, scores: Array<{ score: string; odds: number }>) {
+    const matchId = matchIds.get(matchKey)
+    if (!matchId) return
+    for (const s of scores) {
+      await prisma.correctScoreOdds.create({
+        data: { matchId, bookmaker: "Bet365", score: s.score, odds: s.odds, isMajorBookmaker: true },
+      })
+      csCount++
+    }
+  }
+
+  await seedCorrectScores("A:MexicovsSouth Africa", [
+    { score: "1-0", odds: 5.0 }, { score: "2-0", odds: 6.5 }, { score: "2-1", odds: 7.5 },
+    { score: "1-1", odds: 6.0 }, { score: "0-0", odds: 8.5 }, { score: "3-0", odds: 10.0 },
+    { score: "3-1", odds: 12.0 }, { score: "0-1", odds: 11.0 }, { score: "1-2", odds: 13.0 },
+    { score: "0-2", odds: 18.0 }, { score: "2-2", odds: 15.0 }, { score: "3-2", odds: 25.0 },
+  ])
+  await seedCorrectScores("C:BrazilvsMorocco", [
+    { score: "1-0", odds: 5.5 }, { score: "2-0", odds: 6.0 }, { score: "2-1", odds: 7.0 },
+    { score: "1-1", odds: 6.5 }, { score: "0-0", odds: 9.0 }, { score: "3-0", odds: 8.5 },
+    { score: "3-1", odds: 10.0 }, { score: "0-1", odds: 12.0 }, { score: "1-2", odds: 14.0 },
+    { score: "0-2", odds: 20.0 }, { score: "2-2", odds: 14.0 }, { score: "3-2", odds: 22.0 },
+  ])
+  await seedCorrectScores("J:ArgentinavsAlgeria", [
+    { score: "1-0", odds: 5.0 }, { score: "2-0", odds: 5.5 }, { score: "2-1", odds: 7.0 },
+    { score: "1-1", odds: 7.0 }, { score: "0-0", odds: 10.0 }, { score: "3-0", odds: 7.5 },
+    { score: "3-1", odds: 9.0 }, { score: "0-1", odds: 15.0 }, { score: "1-2", odds: 17.0 },
+    { score: "0-2", odds: 25.0 }, { score: "2-2", odds: 15.0 }, { score: "4-0", odds: 12.0 },
+  ])
+  await seedCorrectScores("L:EnglandvsCroatia", [
+    { score: "1-0", odds: 5.0 }, { score: "2-0", odds: 6.5 }, { score: "2-1", odds: 7.5 },
+    { score: "1-1", odds: 6.0 }, { score: "0-0", odds: 8.5 }, { score: "3-0", odds: 10.0 },
+    { score: "3-1", odds: 12.0 }, { score: "0-1", odds: 11.0 }, { score: "1-2", odds: 13.0 },
+    { score: "0-2", odds: 18.0 }, { score: "2-2", odds: 14.0 }, { score: "3-2", odds: 26.0 },
+  ])
+  await seedCorrectScores("I:FrancevsSenegal", [
+    { score: "1-0", odds: 4.5 }, { score: "2-0", odds: 5.0 }, { score: "2-1", odds: 7.0 },
+    { score: "1-1", odds: 7.0 }, { score: "0-0", odds: 10.0 }, { score: "3-0", odds: 7.0 },
+    { score: "3-1", odds: 9.0 }, { score: "0-1", odds: 17.0 }, { score: "1-2", odds: 19.0 },
+    { score: "0-2", odds: 28.0 }, { score: "2-2", odds: 16.0 }, { score: "4-0", odds: 11.0 },
+  ])
+  await seedCorrectScores("F:NetherlandsvsJapan", [
+    { score: "1-0", odds: 5.0 }, { score: "2-0", odds: 6.0 }, { score: "2-1", odds: 7.5 },
+    { score: "1-1", odds: 6.5 }, { score: "0-0", odds: 9.0 }, { score: "3-0", odds: 9.0 },
+    { score: "3-1", odds: 11.0 }, { score: "0-1", odds: 12.0 }, { score: "1-2", odds: 14.0 },
+    { score: "0-2", odds: 20.0 }, { score: "2-2", odds: 15.0 }, { score: "3-2", odds: 24.0 },
+  ])
+  await seedCorrectScores("K:PortugalvsDR Congo", [
+    { score: "1-0", odds: 5.0 }, { score: "2-0", odds: 5.5 }, { score: "2-1", odds: 7.0 },
+    { score: "1-1", odds: 7.5 }, { score: "0-0", odds: 11.0 }, { score: "3-0", odds: 7.5 },
+    { score: "3-1", odds: 9.5 }, { score: "0-1", odds: 15.0 }, { score: "1-2", odds: 18.0 },
+    { score: "0-2", odds: 26.0 }, { score: "2-2", odds: 16.0 }, { score: "4-0", odds: 12.0 },
+  ])
+
+  console.log(`✅ ${csCount} 条准确比分赔率创建完成`)
   console.log("🎉 数据播种完成!")
   await prisma.$disconnect()
 }

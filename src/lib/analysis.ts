@@ -293,6 +293,108 @@ export function isKeyMatch(homeBaseScore: number, awayBaseScore: number): boolea
 /**
  * 生成小组形势总结
  */
+/** ───── H2H 历史交锋分析 ───── */
+
+export interface H2HRecord {
+  homeScore: number
+  awayScore: number
+  homeTeamName: string
+  awayTeamName: string
+  matchDate: string
+  competition?: string | null
+}
+
+export interface H2HAnalysis {
+  totalMatches: number
+  homeWins: number
+  draws: number
+  awayWins: number
+  homeWinRate: number
+  drawRate: number
+  awayWinRate: number
+  bothTeamsScoredRate: number
+  avgTotalGoals: number
+  commonScores: Array<{ score: string; count: number; percentage: number }>
+  recentForm: string
+}
+
+/**
+ * 分析历史交锋数据
+ */
+export function analyzeH2H(records: H2HRecord[]): H2HAnalysis | null {
+  if (records.length === 0) return null
+
+  const homeWins = records.filter(r => r.homeScore > r.awayScore).length
+  const draws = records.filter(r => r.homeScore === r.awayScore).length
+  const awayWins = records.length - homeWins - draws
+  const bothScored = records.filter(r => r.homeScore > 0 && r.awayScore > 0).length
+  const totalGoals = records.reduce((sum, r) => sum + r.homeScore + r.awayScore, 0)
+
+  // 常见比分
+  const scoreMap = new Map<string, number>()
+  for (const r of records) {
+    const key = `${r.homeScore}:${r.awayScore}`
+    scoreMap.set(key, (scoreMap.get(key) || 0) + 1)
+  }
+  const commonScores = [...scoreMap.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(([score, count]) => ({
+      score,
+      count,
+      percentage: Math.round((count / records.length) * 1000) / 10,
+    }))
+
+  // 近期交锋趋势
+  const recentStr = records.length <= 3 ? "交锋样本较少" : "交锋记录较丰富"
+
+  return {
+    totalMatches: records.length,
+    homeWins,
+    draws,
+    awayWins,
+    homeWinRate: Math.round((homeWins / records.length) * 1000) / 10,
+    drawRate: Math.round((draws / records.length) * 1000) / 10,
+    awayWinRate: Math.round((awayWins / records.length) * 1000) / 10,
+    bothTeamsScoredRate: Math.round((bothScored / records.length) * 1000) / 10,
+    avgTotalGoals: Math.round((totalGoals / records.length) * 10) / 10,
+    commonScores,
+    recentForm: recentStr,
+  }
+}
+
+/** ───── 准确比分市场分析 ───── */
+
+export interface CorrectScoreItem {
+  score: string
+  odds: number
+  impliedProb: number
+  category: "最可能" | "中等可能" | "小概率"
+}
+
+/**
+ * 分析准确比分赔率，按概率分类
+ */
+export function analyzeCorrectScores(
+  records: { score: string; odds: number }[],
+): CorrectScoreItem[] {
+  const items = records
+    .map(r => ({
+      score: r.score,
+      odds: r.odds,
+      impliedProb: Math.round((1 / r.odds) * 10000) / 100,
+    }))
+    .sort((a, b) => b.impliedProb - a.impliedProb)
+
+  return items.map(item => {
+    let category: "最可能" | "中等可能" | "小概率"
+    if (item.impliedProb >= 10) category = "最可能"
+    else if (item.impliedProb >= 5) category = "中等可能"
+    else category = "小概率"
+    return { ...item, category }
+  })
+}
+
 export function generateGroupSummary(tiers: Array<{ tier: string; teams: TeamAnalysisData[] }>): string {
   const parts: string[] = []
   for (const t of tiers) {

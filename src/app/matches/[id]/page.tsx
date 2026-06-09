@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useMemo, useCallback } from "react"
+import { useEffect, useState, useMemo } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,10 +10,11 @@ import { Button } from "@/components/ui/button"
 import {
   ArrowLeft, TrendingUp, DollarSign, ClipboardCheck,
   AlertTriangle, Info, BarChart3, ShieldAlert, History,
-  Scale, Target, BrainCircuit,
+  Scale, Target, BrainCircuit, Goal,
 } from "lucide-react"
 import { TeamFlag } from "@/components/team-flag"
 import { predictMatch, confidenceLabel, confidenceColor, type TeamStats, type PredictionResult } from "@/lib/predict-match"
+import type { H2HAnalysis, CorrectScoreItem } from "@/lib/analysis"
 
 interface TeamInfo {
   id: string
@@ -102,6 +103,23 @@ interface H2HRecord {
   stage: string | null
 }
 
+interface H2HApiResponse {
+  records: H2HRecord[]
+  analysis: H2HAnalysis | null
+}
+
+interface CorrectScoreApiItem {
+  id: string
+  score: string
+  odds: number
+  bookmaker: string
+}
+
+interface CorrectScoreApiResponse {
+  items: CorrectScoreApiItem[]
+  analysis: CorrectScoreItem[]
+}
+
 function parseRiskReasons(reasons: string | null | undefined): string[] {
   if (!reasons) return []
   try { return JSON.parse(reasons) } catch { return [] }
@@ -141,7 +159,10 @@ export default function MatchDetailPage() {
   const [loading, setLoading] = useState(true)
   const [predicting, setPredicting] = useState(false)
   const [h2hRecords, setH2hRecords] = useState<H2HRecord[]>([])
+  const [h2hAnalysis, setH2hAnalysis] = useState<H2HAnalysis | null>(null)
   const [h2hLoading, setH2hLoading] = useState(true)
+  const [csItems, setCsItems] = useState<CorrectScoreItem[]>([])
+  const [csLoading, setCsLoading] = useState(true)
 
   // 加载比赛+球队数据
   useEffect(() => {
@@ -173,11 +194,19 @@ export default function MatchDetailPage() {
   // 加载交锋数据
   useEffect(() => {
     if (!params.id) return
-    fetch(`/api/matches/${params.id}/h2h`)
-      .then((r) => r.json())
-      .then((res) => setH2hRecords(res.data ?? []))
+    Promise.all([
+      fetch(`/api/matches/${params.id}/h2h`).then((r) => r.json()),
+      fetch(`/api/matches/${params.id}/correct-scores`).then((r) => r.json()),
+    ])
+      .then(([h2hRes, csRes]) => {
+        const data = h2hRes.data as H2HApiResponse | undefined
+        setH2hRecords(data?.records ?? [])
+        setH2hAnalysis(data?.analysis ?? null)
+        const csData = csRes.data as CorrectScoreApiResponse | undefined
+        setCsItems(csData?.analysis ?? [])
+      })
       .catch(() => {})
-      .finally(() => setH2hLoading(false))
+      .finally(() => { setH2hLoading(false); setCsLoading(false) })
   }, [params.id])
 
   // 客户端预测（作为无服务端预测时的后备）
@@ -193,21 +222,6 @@ export default function MatchDetailPage() {
 
   const isUpcoming = match?.status === "scheduled"
   const latestPrediction = match?.predictions?.[0] ?? null
-
-  // H2H 统计
-  const h2hStats = useMemo(() => {
-    if (!match || h2hRecords.length === 0) return null
-    const homeWins = h2hRecords.filter(
-      (r) => (r.homeTeamName === match.homeTeam.name && r.homeScore > r.awayScore) ||
-             (r.awayTeamName === match.homeTeam.name && r.awayScore > r.homeScore)
-    ).length
-    const awayWins = h2hRecords.filter(
-      (r) => (r.awayTeamName === match.awayTeam.name && r.awayScore > r.homeScore) ||
-             (r.homeTeamName === match.awayTeam.name && r.homeScore > r.awayScore)
-    ).length
-    const draws = h2hRecords.length - homeWins - awayWins
-    return { homeWins, awayWins, draws, total: h2hRecords.length }
-  }, [h2hRecords, match])
 
   // 赔率市场统计
   const oddsStats = useMemo(() => {
@@ -393,7 +407,7 @@ export default function MatchDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Card 3: 交锋分析卡 */}
+          {/* Card 3: 交锋分析卡（增强版） */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
@@ -401,29 +415,69 @@ export default function MatchDetailPage() {
                 历史交锋分析
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
               {h2hLoading ? (
                 <p className="text-sm text-muted-foreground">加载交锋数据...</p>
-              ) : h2hStats ? (
-                <div className="space-y-3">
+              ) : h2hAnalysis ? (
+                <>
+                  {/* 胜负平分布 */}
                   <div className="grid grid-cols-3 gap-4 text-center">
                     <div className="rounded-lg bg-amber-50 p-3 dark:bg-amber-950/20">
                       <div className="text-xs text-muted-foreground">{match.homeTeam.name} 胜</div>
-                      <div className="mt-0.5 text-xl font-bold text-amber-700 dark:text-amber-400">{h2hStats.homeWins}</div>
+                      <div className="mt-0.5 text-xl font-bold text-amber-700 dark:text-amber-400">{h2hAnalysis.homeWins}</div>
+                      <div className="text-xs text-muted-foreground">{h2hAnalysis.homeWinRate}%</div>
                     </div>
                     <div className="rounded-lg bg-yellow-50 p-3 dark:bg-yellow-950/20">
                       <div className="text-xs text-muted-foreground">平局</div>
-                      <div className="mt-0.5 text-xl font-bold text-yellow-700 dark:text-yellow-400">{h2hStats.draws}</div>
+                      <div className="mt-0.5 text-xl font-bold text-yellow-700 dark:text-yellow-400">{h2hAnalysis.draws}</div>
+                      <div className="text-xs text-muted-foreground">{h2hAnalysis.drawRate}%</div>
                     </div>
                     <div className="rounded-lg bg-blue-50 p-3 dark:bg-blue-950/20">
                       <div className="text-xs text-muted-foreground">{match.awayTeam.name} 胜</div>
-                      <div className="mt-0.5 text-xl font-bold text-blue-700 dark:text-blue-400">{h2hStats.awayWins}</div>
+                      <div className="mt-0.5 text-xl font-bold text-blue-700 dark:text-blue-400">{h2hAnalysis.awayWins}</div>
+                      <div className="text-xs text-muted-foreground">{h2hAnalysis.awayWinRate}%</div>
                     </div>
                   </div>
+
+                  {/* 深度统计 */}
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <div className="rounded-lg border p-2.5 text-center">
+                      <div className="text-[10px] text-muted-foreground">总交锋</div>
+                      <div className="mt-0.5 text-base font-bold">{h2hAnalysis.totalMatches} 场</div>
+                    </div>
+                    <div className="rounded-lg border p-2.5 text-center">
+                      <div className="text-[10px] text-muted-foreground">场均总进球</div>
+                      <div className="mt-0.5 text-base font-bold">{h2hAnalysis.avgTotalGoals}</div>
+                    </div>
+                    <div className="rounded-lg border p-2.5 text-center">
+                      <div className="text-[10px] text-muted-foreground">双方进球率</div>
+                      <div className="mt-0.5 text-base font-bold">{h2hAnalysis.bothTeamsScoredRate}%</div>
+                    </div>
+                    <div className="rounded-lg border p-2.5 text-center">
+                      <div className="text-[10px] text-muted-foreground">样本</div>
+                      <div className="mt-0.5 text-base font-bold">{h2hAnalysis.recentForm}</div>
+                    </div>
+                  </div>
+
+                  {/* 常见比分 */}
+                  {h2hAnalysis.commonScores.length > 0 && (
+                    <div>
+                      <div className="mb-2 text-xs font-medium text-muted-foreground">常见比分</div>
+                      <div className="flex flex-wrap gap-2">
+                        {h2hAnalysis.commonScores.map((s) => (
+                          <div key={s.score} className="rounded-md border bg-muted/30 px-2.5 py-1.5 text-center text-sm">
+                            <span className="font-mono font-bold tabular-nums">{s.score}</span>
+                            <span className="ml-1.5 text-xs text-muted-foreground">{s.count}次 ({s.percentage}%)</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <p className="text-center text-xs text-muted-foreground">
-                    共 {h2hStats.total} 次历史交锋记录
+                    共 {h2hAnalysis.totalMatches} 次历史交锋记录
                   </p>
-                </div>
+                </>
               ) : (
                 <div className="flex flex-col items-center gap-2 py-6">
                   <History className="h-6 w-6 text-muted-foreground" />
@@ -559,6 +613,54 @@ export default function MatchDetailPage() {
                   EV &gt; 0.05 为正价值信号（模型认为该选项被市场低估），
                   EV &lt; -0.05 为负价值信号（模型认为该选项被市场高估）。
                   仅供参考，不构成任何投注建议。
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Card X: 准确比分市场卡 */}
+          {!csLoading && csItems.length > 0 && (
+            <Card className="border-violet-200 dark:border-violet-800/30">
+              <CardHeader className="border-b border-violet-100 dark:border-violet-900/20">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <Goal className="h-4 w-4 text-violet-500" />
+                  准确比分市场
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-5">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b text-left text-muted-foreground">
+                        <th className="pb-2 pr-4 font-medium">比分</th>
+                        <th className="pb-2 pr-4 font-medium">赔率</th>
+                        <th className="pb-2 font-medium">隐含概率</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {csItems.map((item) => (
+                        <tr key={item.score} className="border-b last:border-0 hover:bg-muted/30">
+                          <td className="py-2 pr-4">
+                            <span className="font-mono font-bold tabular-nums">{item.score}</span>
+                            <span className={`ml-2 inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                              item.category === "最可能"
+                                ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                : item.category === "中等可能"
+                                ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+                                : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
+                            }`}>
+                              {item.category}
+                            </span>
+                          </td>
+                          <td className="py-2 pr-4 font-mono tabular-nums">{item.odds.toFixed(2)}</td>
+                          <td className="py-2 font-mono tabular-nums">{item.impliedProb.toFixed(1)}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mt-3 rounded-lg bg-muted/30 p-2.5 text-xs text-muted-foreground leading-relaxed">
+                  <strong>说明：</strong>准确比分赔率来自主流博彩公司。隐含概率 ≥ 10% 标记为"最可能"，≥ 5% 为"中等可能"，其余为"小概率"。仅供参考。
                 </div>
               </CardContent>
             </Card>
@@ -825,7 +927,10 @@ function HeadToHeadCard({
   useEffect(() => {
     fetch(`/api/matches/${matchId}/h2h`)
       .then((r) => r.json())
-      .then((res) => setRecords(res.data ?? []))
+      .then((res) => {
+        const data = res.data as H2HApiResponse | undefined
+        setRecords(data?.records ?? [])
+      })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [matchId])
