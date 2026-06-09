@@ -15,6 +15,7 @@ import {
 import { TeamFlag } from "@/components/team-flag"
 import { predictMatch, confidenceLabel, confidenceColor, type TeamStats, type PredictionResult } from "@/lib/predict-match"
 import type { H2HAnalysis, CorrectScoreItem } from "@/lib/analysis"
+import type { ScorePrediction } from "@/lib/correct-score-predictor"
 
 interface TeamInfo {
   id: string
@@ -115,9 +116,20 @@ interface CorrectScoreApiItem {
   bookmaker: string
 }
 
+interface ModelPredictionResult {
+  predictions: ScorePrediction[]
+  outcomeSummary: {
+    homeWin: number
+    draw: number
+    awayWin: number
+  }
+  modelConfidence: number
+}
+
 interface CorrectScoreApiResponse {
   items: CorrectScoreApiItem[]
   analysis: CorrectScoreItem[]
+  modelPrediction?: ModelPredictionResult
 }
 
 function parseRiskReasons(reasons: string | null | undefined): string[] {
@@ -163,6 +175,7 @@ export default function MatchDetailPage() {
   const [h2hLoading, setH2hLoading] = useState(true)
   const [csItems, setCsItems] = useState<CorrectScoreItem[]>([])
   const [csLoading, setCsLoading] = useState(true)
+  const [modelPrediction, setModelPrediction] = useState<ModelPredictionResult | null>(null)
 
   // 加载比赛+球队数据
   useEffect(() => {
@@ -204,6 +217,7 @@ export default function MatchDetailPage() {
         setH2hAnalysis(data?.analysis ?? null)
         const csData = csRes.data as CorrectScoreApiResponse | undefined
         setCsItems(csData?.analysis ?? [])
+        setModelPrediction(csData?.modelPrediction ?? null)
       })
       .catch(() => {})
       .finally(() => { setH2hLoading(false); setCsLoading(false) })
@@ -618,50 +632,157 @@ export default function MatchDetailPage() {
             </Card>
           )}
 
-          {/* Card X: 准确比分市场卡 */}
-          {!csLoading && csItems.length > 0 && (
+          {/* Card X: 准确比分预测 */}
+          {!csLoading && (
             <Card className="border-violet-200 dark:border-violet-800/30">
               <CardHeader className="border-b border-violet-100 dark:border-violet-900/20">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <Goal className="h-4 w-4 text-violet-500" />
-                  准确比分市场
+                  准确比分预测
+                  {modelPrediction && (
+                    <span className="ml-2 text-xs font-normal text-muted-foreground">
+                      Top3 集中度 {modelPrediction.modelConfidence}%
+                    </span>
+                  )}
                 </CardTitle>
               </CardHeader>
-              <CardContent className="pt-5">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b text-left text-muted-foreground">
-                        <th className="pb-2 pr-4 font-medium">比分</th>
-                        <th className="pb-2 pr-4 font-medium">赔率</th>
-                        <th className="pb-2 font-medium">隐含概率</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {csItems.map((item) => (
-                        <tr key={item.score} className="border-b last:border-0 hover:bg-muted/30">
-                          <td className="py-2 pr-4">
-                            <span className="font-mono font-bold tabular-nums">{item.score}</span>
-                            <span className={`ml-2 inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
-                              item.category === "最可能"
-                                ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                : item.category === "中等可能"
-                                ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
-                                : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
-                            }`}>
-                              {item.category}
-                            </span>
-                          </td>
-                          <td className="py-2 pr-4 font-mono tabular-nums">{item.odds.toFixed(2)}</td>
-                          <td className="py-2 font-mono tabular-nums">{item.impliedProb.toFixed(1)}%</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="mt-3 rounded-lg bg-muted/30 p-2.5 text-xs text-muted-foreground leading-relaxed">
-                  <strong>说明：</strong>准确比分赔率来自主流博彩公司。隐含概率 ≥ 10% 标记为"最可能"，≥ 5% 为"中等可能"，其余为"小概率"。仅供参考。
-                </div>
+              <CardContent className="pt-5 space-y-6">
+                {/* 模型预测概率分布 */}
+                {modelPrediction && modelPrediction.predictions.length > 0 && (
+                  <div>
+                    <h4 className="mb-3 text-sm font-medium text-violet-700 dark:text-violet-400">
+                      <BrainCircuit className="mr-1 inline h-4 w-4" />
+                      模型预测概率
+                    </h4>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b text-left text-muted-foreground">
+                            <th className="pb-2 pr-3 font-medium">比分</th>
+                            <th className="pb-2 pr-3 font-medium">模型概率</th>
+                            <th className="pb-2 pr-3 font-medium">市场概率</th>
+                            <th className="pb-2 pr-3 font-medium">融合概率</th>
+                            <th className="pb-2 font-medium">信号</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {modelPrediction.predictions.slice(0, 10).map((p) => {
+                            const maxProb = modelPrediction.predictions[0].fusedProb || 1
+                            return (
+                              <tr key={p.score} className="border-b last:border-0 hover:bg-muted/30">
+                                <td className="py-2.5 pr-3">
+                                  <span className="font-mono font-bold tabular-nums">{p.score}</span>
+                                </td>
+                                <td className="py-2.5 pr-3">
+                                  <div className="flex items-center gap-2">
+                                    <div className="h-2 w-20 overflow-hidden rounded-full bg-muted">
+                                      <div
+                                        className="h-full rounded-full bg-indigo-400 transition-all"
+                                        style={{ width: `${(p.modelProb / maxProb) * 100}%` }}
+                                      />
+                                    </div>
+                                    <span className="font-mono text-xs tabular-nums">
+                                      {p.modelProb.toFixed(1)}%
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="py-2.5 pr-3">
+                                  {p.marketProb !== null ? (
+                                    <div className="flex items-center gap-2">
+                                      <div className="h-2 w-20 overflow-hidden rounded-full bg-muted">
+                                        <div
+                                          className="h-full rounded-full bg-amber-400 transition-all"
+                                          style={{ width: `${(p.marketProb / maxProb) * 100}%` }}
+                                        />
+                                      </div>
+                                      <span className="font-mono text-xs tabular-nums">
+                                        {p.marketProb.toFixed(1)}%
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground">—</span>
+                                  )}
+                                </td>
+                                <td className="py-2.5 pr-3">
+                                  <div className="flex items-center gap-2">
+                                    <div className="h-2.5 w-20 overflow-hidden rounded-full bg-muted">
+                                      <div
+                                        className="h-full rounded-full bg-violet-500 transition-all"
+                                        style={{ width: `${(p.fusedProb / maxProb) * 100}%` }}
+                                      />
+                                    </div>
+                                    <span className="font-mono text-xs font-medium tabular-nums">
+                                      {p.fusedProb.toFixed(1)}%
+                                    </span>
+                                  </div>
+                                </td>
+                                <td className="py-2.5">
+                                  {p.valueSignal === "positive" && (
+                                    <span className="inline-block rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                                      高价值
+                                    </span>
+                                  )}
+                                  {p.valueSignal === "negative" && (
+                                    <span className="inline-block rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                                      低价值
+                                    </span>
+                                  )}
+                                  {p.valueSignal === "neutral" && (
+                                    <span className="text-[10px] text-muted-foreground">中性</span>
+                                  )}
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {/* 市场赔率参考 */}
+                {csItems.length > 0 && (
+                  <div>
+                    <h4 className="mb-3 text-sm font-medium text-amber-700 dark:text-amber-400">
+                      <DollarSign className="mr-1 inline h-4 w-4" />
+                      市场赔率参考
+                    </h4>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b text-left text-muted-foreground">
+                            <th className="pb-2 pr-4 font-medium">比分</th>
+                            <th className="pb-2 pr-4 font-medium">赔率</th>
+                            <th className="pb-2 font-medium">隐含概率</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {csItems.map((item) => (
+                            <tr key={item.score} className="border-b last:border-0 hover:bg-muted/30">
+                              <td className="py-2 pr-4">
+                                <span className="font-mono font-bold tabular-nums">{item.score}</span>
+                                <span className={`ml-2 inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                                  item.category === "最可能"
+                                    ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                    : item.category === "中等可能"
+                                    ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+                                    : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
+                                }`}>
+                                  {item.category}
+                                </span>
+                              </td>
+                              <td className="py-2 pr-4 font-mono tabular-nums">{item.odds.toFixed(2)}</td>
+                              <td className="py-2 font-mono tabular-nums">{item.impliedProb.toFixed(1)}%</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    <div className="mt-3 rounded-lg bg-muted/30 p-2.5 text-xs text-muted-foreground leading-relaxed">
+                      <strong>说明：</strong>模型概率基于泊松分布（球队攻防数据）。市场概率来自博彩公司赔率。两柱差异越大，价值信号越明显。
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
