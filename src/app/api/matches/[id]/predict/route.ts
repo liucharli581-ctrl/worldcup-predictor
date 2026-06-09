@@ -8,6 +8,7 @@ import {
   calculateRiskLevel,
   generateReport,
 } from "@/lib/prediction"
+import { calculateValueSignals } from "@/lib/analysis"
 
 export async function POST(
   _request: NextRequest,
@@ -64,10 +65,29 @@ export async function POST(
       riskReasons,
     })
 
+    // 价值信号计算
+    const valueSignals = calculateValueSignals(
+      probs.homeWinProbability,
+      probs.drawProbability,
+      probs.awayWinProbability,
+      match.odds.map(o => ({
+        bookmaker: o.bookmaker,
+        currentHomeWin: o.currentHomeWin,
+        currentDraw: o.currentDraw,
+        currentAwayWin: o.currentAwayWin,
+        isMajorBookmaker: o.isMajorBookmaker,
+        isAbnormal: o.isAbnormal,
+      }))
+    )
+
+    const homeSignal = valueSignals.find(v => v.selectionName === "主胜")
+    const drawSignal = valueSignals.find(v => v.selectionName === "平局")
+    const awaySignal = valueSignals.find(v => v.selectionName === "客胜")
+
     const prediction = await prisma.prediction.create({
       data: {
         matchId: id,
-        modelVersion: "v1.0",
+        modelVersion: "v1.1",
         homeBaseScore: homeScore.baseScore,
         awayBaseScore: awayScore.baseScore,
         marketScore: marketAnalysis.marketScore,
@@ -79,6 +99,12 @@ export async function POST(
         riskLevel,
         riskReasons: JSON.stringify(riskReasons),
         reportText,
+        homeValueEv: homeSignal?.expectedValue ?? null,
+        drawValueEv: drawSignal?.expectedValue ?? null,
+        awayValueEv: awaySignal?.expectedValue ?? null,
+        homeValueSignal: homeSignal?.valueSignal ?? null,
+        drawValueSignal: drawSignal?.valueSignal ?? null,
+        awayValueSignal: awaySignal?.valueSignal ?? null,
       },
     })
 
@@ -88,6 +114,7 @@ export async function POST(
       marketAnalysis,
       homeTeamScore: homeScore,
       awayTeamScore: awayScore,
+      valueSignals,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : "预测计算失败"

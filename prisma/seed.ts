@@ -1,6 +1,8 @@
 import "dotenv/config"
 import { PrismaPg } from "@prisma/adapter-pg"
 import { PrismaClient } from "../src/generated/prisma/client"
+import { calculateBaseScore, calculateFormLabel } from "../src/lib/analysis"
+import type { TeamAnalysisData } from "../src/lib/analysis"
 
 const connectionString = process.env.DATABASE_URL!
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) })
@@ -189,6 +191,7 @@ async function main() {
   console.log("🌱 清除旧数据...")
   await prisma.modelReview.deleteMany()
   await prisma.virtualSimulation.deleteMany()
+  await prisma.headToHead.deleteMany()
   await prisma.prediction.deleteMany()
   await prisma.oddsRecord.deleteMany()
   await prisma.match.deleteMany()
@@ -200,6 +203,29 @@ async function main() {
   for (const g of groups) {
     for (const t of g.teams) {
       const s = stats(t.ranking, t.appearances)
+      const analysisInput: TeamAnalysisData = {
+        id: "",
+        name: t.name,
+        fifaCode: t.fifaCode,
+        fifaRanking: t.ranking,
+        eloRating: s.eloRating,
+        worldCupTitles: s.worldCupTitles,
+        worldCupAppearances: t.appearances,
+        totalWins: s.totalWins,
+        totalDraws: s.totalDraws,
+        totalLosses: s.totalLosses,
+        totalMatches: s.totalMatches,
+        goalsFor: s.goalsFor,
+        goalsAgainst: s.goalsAgainst,
+        recent5Wins: s.recent5Wins,
+        recent5Draws: s.recent5Draws,
+        recent5Losses: s.recent5Losses,
+        avgGoalsFor: s.avgGoalsFor,
+        avgGoalsAgainst: s.avgGoalsAgainst,
+        injuryScore: s.injuryScore,
+      }
+      const baseScore = calculateBaseScore(analysisInput)
+      const formLabel = calculateFormLabel(analysisInput)
       const team = await prisma.team.create({
         data: {
           name: t.name,
@@ -207,6 +233,8 @@ async function main() {
           country: t.name,
           fifaRanking: t.ranking,
           groupName: g.name,
+          baseScore,
+          formLabel,
           ...s,
         },
       })
