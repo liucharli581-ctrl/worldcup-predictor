@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import {
   ArrowLeft, TrendingUp, DollarSign, ClipboardCheck,
-  AlertTriangle, Info, BarChart3, ShieldAlert, History,
+  AlertTriangle, BarChart3, ShieldAlert, History,
   Scale, Target, BrainCircuit, Goal,
 } from "lucide-react"
 import { TeamFlag } from "@/components/team-flag"
@@ -333,175 +333,211 @@ export default function MatchDetailPage() {
         </CardContent>
       </Card>
 
-      {/* ========== 赛前分析区域（仅未开始比赛） ========== */}
-      {isUpcoming && (latestPrediction || clientPrediction) && (
-        <>
-          {/* Card 2: 球队对比卡 */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Scale className="h-4 w-4" />
-                球队实力对比
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* BaseScore 对比条 */}
-              {latestPrediction && (
-                <div>
-                  <div className="mb-1.5 flex justify-between text-xs text-muted-foreground">
-                    <span>{match.homeTeam.name}</span>
-                    <span className="font-semibold">
-                      {latestPrediction.homeBaseScore ?? "?"} : {latestPrediction.awayBaseScore ?? "?"}
-                    </span>
-                    <span>{match.awayTeam.name}</span>
-                  </div>
-                  <div className="flex h-3 w-full overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="bg-amber-500 transition-all"
-                      style={{
-                        width: latestPrediction.homeBaseScore != null && latestPrediction.awayBaseScore != null
-                          ? `${(latestPrediction.homeBaseScore / (latestPrediction.homeBaseScore + latestPrediction.awayBaseScore)) * 100}%`
-                          : "50%"
-                      }}
-                    />
-                    <div
-                      className="bg-blue-500 transition-all"
-                      style={{
-                        width: latestPrediction.homeBaseScore != null && latestPrediction.awayBaseScore != null
-                          ? `${(latestPrediction.awayBaseScore / (latestPrediction.homeBaseScore + latestPrediction.awayBaseScore)) * 100}%`
-                          : "50%"
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
+      {/* ========== 四维分析标签页 ========== */}
+      <Tabs defaultValue={isUpcoming ? "overview" : "tools"}>
+        <TabsList className="grid w-full grid-cols-4">
+          {isUpcoming && (
+            <TabsTrigger value="overview" className="flex items-center gap-1">
+              <Target className="h-3.5 w-3.5" />
+              预测总览
+            </TabsTrigger>
+          )}
+          <TabsTrigger value="odds" className="flex items-center gap-1">
+            <BarChart3 className="h-3.5 w-3.5" />
+            赔率分析
+          </TabsTrigger>
+          <TabsTrigger value="compare" className="flex items-center gap-1">
+            <Scale className="h-3.5 w-3.5" />
+            数据对比
+          </TabsTrigger>
+          <TabsTrigger value="tools" className="flex items-center gap-1">
+            {match.status === "completed" ? (
+              <><ClipboardCheck className="h-3.5 w-3.5" />复盘总结</>
+            ) : (
+              <><DollarSign className="h-3.5 w-3.5" />复盘工具</>
+            )}
+          </TabsTrigger>
+        </TabsList>
 
-              {/* 因素拆解表 */}
-              {clientPrediction && (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b text-left text-muted-foreground">
-                        <th className="px-4 py-3 font-medium">因素</th>
-                        <th className="px-4 py-3 font-medium text-right">{match.homeTeam.name}</th>
-                        <th className="px-4 py-3 font-medium text-center" />
-                        <th className="px-4 py-3 font-medium text-left">{match.awayTeam.name}</th>
-                        <th className="px-4 py-3 font-medium text-left hidden sm:table-cell">倾向</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {clientPrediction.factors.map((f) => (
-                        <tr key={f.label} className="border-b last:border-0 hover:bg-muted/30">
-                          <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{f.label}</td>
-                          <td className={`px-4 py-3 text-right font-mono tabular-nums ${f.advantage === "home" ? "font-semibold text-amber-700 dark:text-amber-400" : ""}`}>
-                            {f.homeValue}
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            {f.advantage === "home" ? (
-                              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-100 text-[10px] font-bold text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">H</span>
-                            ) : f.advantage === "away" ? (
-                              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">A</span>
-                            ) : (
-                              <span className="text-muted-foreground text-[10px]">=</span>
-                            )}
-                          </td>
-                          <td className={`px-4 py-3 font-mono tabular-nums ${f.advantage === "away" ? "font-semibold text-blue-700 dark:text-blue-400" : ""}`}>
-                            {f.awayValue}
-                          </td>
-                          <td className="px-4 py-3 text-xs text-muted-foreground hidden sm:table-cell">{f.description}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-              {!clientPrediction && (
-                <p className="text-sm text-muted-foreground">球队详细数据加载中...</p>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Card 3: 交锋分析卡（增强版） */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <History className="h-4 w-4" />
-                历史交锋分析
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {h2hLoading ? (
-                <p className="text-sm text-muted-foreground">加载交锋数据...</p>
-              ) : h2hAnalysis ? (
-                <>
-                  {/* 胜负平分布 */}
-                  <div className="grid grid-cols-3 gap-4 text-center">
-                    <div className="rounded-lg bg-amber-50 p-3 dark:bg-amber-950/20">
-                      <div className="text-xs text-muted-foreground">{match.homeTeam.name} 胜</div>
-                      <div className="mt-0.5 text-xl font-bold text-amber-700 dark:text-amber-400">{h2hAnalysis.homeWins}</div>
-                      <div className="text-xs text-muted-foreground">{h2hAnalysis.homeWinRate}%</div>
-                    </div>
-                    <div className="rounded-lg bg-yellow-50 p-3 dark:bg-yellow-950/20">
-                      <div className="text-xs text-muted-foreground">平局</div>
-                      <div className="mt-0.5 text-xl font-bold text-yellow-700 dark:text-yellow-400">{h2hAnalysis.draws}</div>
-                      <div className="text-xs text-muted-foreground">{h2hAnalysis.drawRate}%</div>
-                    </div>
-                    <div className="rounded-lg bg-blue-50 p-3 dark:bg-blue-950/20">
-                      <div className="text-xs text-muted-foreground">{match.awayTeam.name} 胜</div>
-                      <div className="mt-0.5 text-xl font-bold text-blue-700 dark:text-blue-400">{h2hAnalysis.awayWins}</div>
-                      <div className="text-xs text-muted-foreground">{h2hAnalysis.awayWinRate}%</div>
-                    </div>
-                  </div>
-
-                  {/* 深度统计 */}
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    <div className="rounded-lg border p-2.5 text-center">
-                      <div className="text-[10px] text-muted-foreground">总交锋</div>
-                      <div className="mt-0.5 text-base font-bold">{h2hAnalysis.totalMatches} 场</div>
-                    </div>
-                    <div className="rounded-lg border p-2.5 text-center">
-                      <div className="text-[10px] text-muted-foreground">场均总进球</div>
-                      <div className="mt-0.5 text-base font-bold">{h2hAnalysis.avgTotalGoals}</div>
-                    </div>
-                    <div className="rounded-lg border p-2.5 text-center">
-                      <div className="text-[10px] text-muted-foreground">双方进球率</div>
-                      <div className="mt-0.5 text-base font-bold">{h2hAnalysis.bothTeamsScoredRate}%</div>
-                    </div>
-                    <div className="rounded-lg border p-2.5 text-center">
-                      <div className="text-[10px] text-muted-foreground">样本</div>
-                      <div className="mt-0.5 text-base font-bold">{h2hAnalysis.recentForm}</div>
-                    </div>
-                  </div>
-
-                  {/* 常见比分 */}
-                  {h2hAnalysis.commonScores.length > 0 && (
+        {/* ===== Tab 1: 预测总览 ===== */}
+        {isUpcoming && (
+          <TabsContent value="overview" className="space-y-4">
+            {!latestPrediction && !clientPrediction ? (
+              <Card>
+                <CardContent className="flex flex-col items-center gap-3 py-12">
+                  <TrendingUp className="h-8 w-8 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">点击按钮生成预测分析</p>
+                  <Button onClick={handleManualPredict} disabled={predicting}>
+                    {predicting ? "预测中..." : "生成预测"}
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                {/* 预测结果卡 */}
+                <Card className="border-amber-200 dark:border-amber-800/30">
+                  <CardHeader className="border-b border-amber-100 dark:border-amber-900/20">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Target className="h-4 w-4 text-amber-500" />
+                      预测结果
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-5 pt-5">
+                    {/* 胜平负概率 */}
                     <div>
-                      <div className="mb-2 text-xs font-medium text-muted-foreground">常见比分</div>
-                      <div className="flex flex-wrap gap-2">
-                        {h2hAnalysis.commonScores.map((s) => (
-                          <div key={s.score} className="rounded-md border bg-muted/30 px-2.5 py-1.5 text-center text-sm">
-                            <span className="font-mono font-bold tabular-nums">{s.score}</span>
-                            <span className="ml-1.5 text-xs text-muted-foreground">{s.count}次 ({s.percentage}%)</span>
-                          </div>
-                        ))}
+                      <div className="mb-2 text-sm text-muted-foreground">胜平负概率</div>
+                      <div className="flex h-8 w-full overflow-hidden rounded-lg">
+                        <div
+                          className="flex items-center justify-center bg-green-500 text-xs font-bold text-white transition-all"
+                          style={{ width: `${latestPrediction ? latestPrediction.homeWinProbability : clientPrediction?.homeWinProb ?? 33}%` }}
+                        >
+                          {((latestPrediction ? latestPrediction.homeWinProbability : clientPrediction?.homeWinProb ?? 0)) > 8
+                            ? `${latestPrediction ? latestPrediction.homeWinProbability : clientPrediction?.homeWinProb ?? 0}%`
+                            : ""}
+                        </div>
+                        <div
+                          className="flex items-center justify-center bg-yellow-400 text-xs font-bold text-white transition-all"
+                          style={{ width: `${latestPrediction ? latestPrediction.drawProbability : clientPrediction?.drawProb ?? 33}%` }}
+                        >
+                          {((latestPrediction ? latestPrediction.drawProbability : clientPrediction?.drawProb ?? 0)) > 8
+                            ? `${latestPrediction ? latestPrediction.drawProbability : clientPrediction?.drawProb ?? 0}%`
+                            : ""}
+                        </div>
+                        <div
+                          className="flex items-center justify-center bg-blue-500 text-xs font-bold text-white transition-all"
+                          style={{ width: `${latestPrediction ? latestPrediction.awayWinProbability : clientPrediction?.awayWinProb ?? 33}%` }}
+                        >
+                          {((latestPrediction ? latestPrediction.awayWinProbability : clientPrediction?.awayWinProb ?? 0)) > 8
+                            ? `${latestPrediction ? latestPrediction.awayWinProbability : clientPrediction?.awayWinProb ?? 0}%`
+                            : ""}
+                        </div>
+                      </div>
+                      <div className="mt-1 flex justify-between text-xs text-muted-foreground">
+                        <span className="text-green-600 font-medium">{match.homeTeam.name} 胜</span>
+                        <span className="text-yellow-600 font-medium">平局</span>
+                        <span className="text-blue-600 font-medium">{match.awayTeam.name} 胜</span>
                       </div>
                     </div>
-                  )}
 
-                  <p className="text-center text-xs text-muted-foreground">
-                    共 {h2hAnalysis.totalMatches} 次历史交锋记录
-                  </p>
-                </>
-              ) : (
-                <div className="flex flex-col items-center gap-2 py-6">
-                  <History className="h-6 w-6 text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">暂无历史交锋数据</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                    {/* 方向 + 置信度 */}
+                    <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                      <div className="rounded-lg border p-3 text-center">
+                        <div className="text-xs text-muted-foreground">预测方向</div>
+                        <div className="mt-1 text-sm font-semibold">
+                          {latestPrediction
+                            ? (latestPrediction.mainDirection === "home_win" ? `${match.homeTeam.name} 胜` :
+                               latestPrediction.mainDirection === "away_win" ? `${match.awayTeam.name} 胜` :
+                               latestPrediction.mainDirection === "draw" ? "平局" : "方向待定")
+                            : clientPrediction?.mainDirection ?? "-"}
+                        </div>
+                      </div>
+                      <div className="rounded-lg border p-3 text-center">
+                        <div className="text-xs text-muted-foreground">置信度</div>
+                        <div className={`mt-1 inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                          confidenceColor(latestPrediction?.confidence ?? clientPrediction?.confidence ?? "low")
+                        }`}>
+                          {confidenceLabel[latestPrediction?.confidence ?? clientPrediction?.confidence ?? "low"] ?? "-"}
+                        </div>
+                      </div>
+                      <div className="rounded-lg border p-3 text-center">
+                        <div className="text-xs text-muted-foreground">风险等级</div>
+                        <div className="mt-1 flex justify-center">
+                          <RiskBadge level={latestPrediction?.riskLevel ?? null} />
+                        </div>
+                      </div>
+                      {clientPrediction && (
+                        <div className="rounded-lg border p-3 text-center">
+                          <div className="text-xs text-muted-foreground">冷门指数</div>
+                          <div className="mt-1 text-sm font-semibold">
+                            {clientPrediction.upsetIndex === "low" ? "低" : clientPrediction.upsetIndex === "medium" ? "中" : "高"}
+                          </div>
+                        </div>
+                      )}
+                    </div>
 
-          {/* Card 4: 赔率市场卡 */}
+                    {/* 模型置信度 */}
+                    {modelPrediction && (
+                      <div className="rounded-lg bg-violet-50 p-3 dark:bg-violet-950/20">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-violet-700 dark:text-violet-400 font-medium">
+                            <BrainCircuit className="mr-1 inline h-4 w-4" />
+                            泊松模型置信度
+                          </span>
+                          <span className="font-mono font-bold text-violet-700 dark:text-violet-400">
+                            Top3 集中度 {modelPrediction.modelConfidence}%
+                          </span>
+                        </div>
+                        {/* 预测比分迷你列表 */}
+                        {modelPrediction.predictions.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {modelPrediction.predictions.slice(0, 5).map((p) => (
+                              <span key={p.score} className="rounded-md border bg-white px-2 py-1 text-xs font-mono dark:bg-violet-950/10">
+                                {p.score}
+                                <span className="ml-1 text-muted-foreground">{p.fusedProb.toFixed(1)}%</span>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* 摘要 */}
+                    {latestPrediction?.reportText && (
+                      <div className="rounded-lg bg-muted/50 p-4 text-sm leading-relaxed">
+                        {latestPrediction.reportText}
+                      </div>
+                    )}
+                    {!latestPrediction && clientPrediction && (
+                      <div className="rounded-lg bg-muted/50 p-4 text-sm leading-relaxed">
+                        {clientPrediction.summary}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* 风险提示卡 */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <ShieldAlert className="h-4 w-4 text-orange-500" />
+                      风险提示
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {latestPrediction ? (
+                      <ul className="space-y-1.5">
+                        {parseRiskReasons(latestPrediction.riskReasons).map((reason, i) => (
+                          <li key={i} className="flex items-start gap-2 text-sm">
+                            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-orange-500" />
+                            <span className="text-muted-foreground">{reason}</span>
+                          </li>
+                        ))}
+                        {parseRiskReasons(latestPrediction.riskReasons).length === 0 && (
+                          <li className="text-sm text-muted-foreground">暂无明显的风险提示</li>
+                        )}
+                      </ul>
+                    ) : clientPrediction ? (
+                      <ul className="space-y-1.5">
+                        {clientPrediction.riskPoints.map((point, i) => (
+                          <li key={i} className="flex items-start gap-2 text-sm">
+                            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-orange-500" />
+                            <span className="text-muted-foreground">{point}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">暂无数据</p>
+                    )}
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </TabsContent>
+        )}
+
+        {/* ===== Tab 2: 赔率分析 ===== */}
+        <TabsContent value="odds" className="space-y-4">
+          {/* 赔率市场卡 */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
@@ -543,7 +579,6 @@ export default function MatchDetailPage() {
                     </div>
                   </div>
 
-                  {/* 主流赔率摘要 */}
                   {oddsStats.major && (
                     <div className="rounded-lg bg-muted/30 p-3">
                       <div className="mb-1 text-xs text-muted-foreground font-medium">{oddsStats.major.bookmaker} 赔率</div>
@@ -568,7 +603,7 @@ export default function MatchDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Card 6: 价值信号卡 */}
+          {/* 价值信号卡 */}
           {latestPrediction && (latestPrediction.homeValueEv != null || latestPrediction.drawValueEv != null || latestPrediction.awayValueEv != null) && (
             <Card className="border-emerald-200 dark:border-emerald-800/30">
               <CardHeader className="border-b border-emerald-100 dark:border-emerald-900/20">
@@ -624,15 +659,13 @@ export default function MatchDetailPage() {
                 </div>
                 <div className="mt-3 rounded-lg bg-muted/30 p-2.5 text-xs text-muted-foreground leading-relaxed">
                   <strong>说明：</strong>价值信号 = 模型概率 vs 市场隐含概率(1/赔率)的偏差。
-                  EV &gt; 0.05 为正价值信号（模型认为该选项被市场低估），
-                  EV &lt; -0.05 为负价值信号（模型认为该选项被市场高估）。
-                  仅供参考，不构成任何投注建议。
+                  EV &gt; 0.05 为正价值信号, EV &lt; -0.05 为负价值信号。
                 </div>
               </CardContent>
             </Card>
           )}
 
-          {/* Card X: 准确比分预测 */}
+          {/* 准确比分预测 */}
           {!csLoading && (
             <Card className="border-violet-200 dark:border-violet-800/30">
               <CardHeader className="border-b border-violet-100 dark:border-violet-900/20">
@@ -647,7 +680,6 @@ export default function MatchDetailPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-5 space-y-6">
-                {/* 模型预测概率分布 */}
                 {modelPrediction && modelPrediction.predictions.length > 0 && (
                   <div>
                     <h4 className="mb-3 text-sm font-medium text-violet-700 dark:text-violet-400">
@@ -675,29 +707,19 @@ export default function MatchDetailPage() {
                                 </td>
                                 <td className="py-2.5 pr-3">
                                   <div className="flex items-center gap-2">
-                                    <div className="h-2 w-20 overflow-hidden rounded-full bg-muted">
-                                      <div
-                                        className="h-full rounded-full bg-indigo-400 transition-all"
-                                        style={{ width: `${(p.modelProb / maxProb) * 100}%` }}
-                                      />
+                                    <div className="h-2 w-16 overflow-hidden rounded-full bg-muted">
+                                      <div className="h-full rounded-full bg-indigo-400 transition-all" style={{ width: `${(p.modelProb / maxProb) * 100}%` }} />
                                     </div>
-                                    <span className="font-mono text-xs tabular-nums">
-                                      {p.modelProb.toFixed(1)}%
-                                    </span>
+                                    <span className="font-mono text-xs tabular-nums">{p.modelProb.toFixed(1)}%</span>
                                   </div>
                                 </td>
                                 <td className="py-2.5 pr-3">
                                   {p.marketProb !== null ? (
                                     <div className="flex items-center gap-2">
-                                      <div className="h-2 w-20 overflow-hidden rounded-full bg-muted">
-                                        <div
-                                          className="h-full rounded-full bg-amber-400 transition-all"
-                                          style={{ width: `${(p.marketProb / maxProb) * 100}%` }}
-                                        />
+                                      <div className="h-2 w-16 overflow-hidden rounded-full bg-muted">
+                                        <div className="h-full rounded-full bg-amber-400 transition-all" style={{ width: `${(p.marketProb / maxProb) * 100}%` }} />
                                       </div>
-                                      <span className="font-mono text-xs tabular-nums">
-                                        {p.marketProb.toFixed(1)}%
-                                      </span>
+                                      <span className="font-mono text-xs tabular-nums">{p.marketProb.toFixed(1)}%</span>
                                     </div>
                                   ) : (
                                     <span className="text-xs text-muted-foreground">—</span>
@@ -705,27 +727,18 @@ export default function MatchDetailPage() {
                                 </td>
                                 <td className="py-2.5 pr-3">
                                   <div className="flex items-center gap-2">
-                                    <div className="h-2.5 w-20 overflow-hidden rounded-full bg-muted">
-                                      <div
-                                        className="h-full rounded-full bg-violet-500 transition-all"
-                                        style={{ width: `${(p.fusedProb / maxProb) * 100}%` }}
-                                      />
+                                    <div className="h-2.5 w-16 overflow-hidden rounded-full bg-muted">
+                                      <div className="h-full rounded-full bg-violet-500 transition-all" style={{ width: `${(p.fusedProb / maxProb) * 100}%` }} />
                                     </div>
-                                    <span className="font-mono text-xs font-medium tabular-nums">
-                                      {p.fusedProb.toFixed(1)}%
-                                    </span>
+                                    <span className="font-mono text-xs font-medium tabular-nums">{p.fusedProb.toFixed(1)}%</span>
                                   </div>
                                 </td>
                                 <td className="py-2.5">
                                   {p.valueSignal === "positive" && (
-                                    <span className="inline-block rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                                      高价值
-                                    </span>
+                                    <span className="inline-block rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">高价值</span>
                                   )}
                                   {p.valueSignal === "negative" && (
-                                    <span className="inline-block rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">
-                                      低价值
-                                    </span>
+                                    <span className="inline-block rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">低价值</span>
                                   )}
                                   {p.valueSignal === "neutral" && (
                                     <span className="text-[10px] text-muted-foreground">中性</span>
@@ -739,8 +752,6 @@ export default function MatchDetailPage() {
                     </div>
                   </div>
                 )}
-
-                {/* 市场赔率参考 */}
                 {csItems.length > 0 && (
                   <div>
                     <h4 className="mb-3 text-sm font-medium text-amber-700 dark:text-amber-400">
@@ -762,14 +773,10 @@ export default function MatchDetailPage() {
                               <td className="py-2 pr-4">
                                 <span className="font-mono font-bold tabular-nums">{item.score}</span>
                                 <span className={`ml-2 inline-block rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
-                                  item.category === "最可能"
-                                    ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                    : item.category === "中等可能"
-                                    ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
-                                    : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
-                                }`}>
-                                  {item.category}
-                                </span>
+                                  item.category === "最可能" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                  : item.category === "中等可能" ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+                                  : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
+                                }`}>{item.category}</span>
                               </td>
                               <td className="py-2 pr-4 font-mono tabular-nums">{item.odds.toFixed(2)}</td>
                               <td className="py-2 font-mono tabular-nums">{item.impliedProb.toFixed(1)}%</td>
@@ -778,150 +785,222 @@ export default function MatchDetailPage() {
                         </tbody>
                       </table>
                     </div>
-                    <div className="mt-3 rounded-lg bg-muted/30 p-2.5 text-xs text-muted-foreground leading-relaxed">
-                      <strong>说明：</strong>模型概率基于泊松分布（球队攻防数据）。市场概率来自博彩公司赔率。两柱差异越大，价值信号越明显。
-                    </div>
                   </div>
                 )}
               </CardContent>
             </Card>
           )}
 
-          {/* Card 7: 预测结果卡 */}
-          <Card className="border-amber-200 dark:border-amber-800/30">
-            <CardHeader className="border-b border-amber-100 dark:border-amber-900/20">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Target className="h-4 w-4 text-amber-500" />
-                预测结果
-              </CardTitle>
+          {/* 全部赔率明细 */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">全部赔率数据</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-5 pt-5">
-              {/* 胜平负概率 */}
-              <div>
-                <div className="mb-2 text-sm text-muted-foreground">胜平负概率</div>
-                <div className="flex h-8 w-full overflow-hidden rounded-lg">
-                  <div
-                    className="flex items-center justify-center bg-green-500 text-xs font-bold text-white transition-all"
-                    style={{ width: `${latestPrediction ? latestPrediction.homeWinProbability : clientPrediction?.homeWinProb ?? 33}%` }}
-                  >
-                    {((latestPrediction ? latestPrediction.homeWinProbability : clientPrediction?.homeWinProb ?? 0)) > 8
-                      ? `${latestPrediction ? latestPrediction.homeWinProbability : clientPrediction?.homeWinProb ?? 0}%`
-                      : ""}
-                  </div>
-                  <div
-                    className="flex items-center justify-center bg-yellow-400 text-xs font-bold text-white transition-all"
-                    style={{ width: `${latestPrediction ? latestPrediction.drawProbability : clientPrediction?.drawProb ?? 33}%` }}
-                  >
-                    {((latestPrediction ? latestPrediction.drawProbability : clientPrediction?.drawProb ?? 0)) > 8
-                      ? `${latestPrediction ? latestPrediction.drawProbability : clientPrediction?.drawProb ?? 0}%`
-                      : ""}
-                  </div>
-                  <div
-                    className="flex items-center justify-center bg-blue-500 text-xs font-bold text-white transition-all"
-                    style={{ width: `${latestPrediction ? latestPrediction.awayWinProbability : clientPrediction?.awayWinProb ?? 33}%` }}
-                  >
-                    {((latestPrediction ? latestPrediction.awayWinProbability : clientPrediction?.awayWinProb ?? 0)) > 8
-                      ? `${latestPrediction ? latestPrediction.awayWinProbability : clientPrediction?.awayWinProb ?? 0}%`
-                      : ""}
-                  </div>
-                </div>
-                <div className="mt-1 flex justify-between text-xs text-muted-foreground">
-                  <span className="text-green-600 font-medium">{match.homeTeam.name} 胜</span>
-                  <span className="text-yellow-600 font-medium">平局</span>
-                  <span className="text-blue-600 font-medium">{match.awayTeam.name} 胜</span>
-                </div>
-              </div>
-
-              {/* 方向 + 置信度 */}
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                <div className="rounded-lg border p-3 text-center">
-                  <div className="text-xs text-muted-foreground">预测方向</div>
-                  <div className="mt-1 text-sm font-semibold">
-                    {latestPrediction
-                      ? (latestPrediction.mainDirection === "home_win" ? `${match.homeTeam.name} 胜` :
-                         latestPrediction.mainDirection === "away_win" ? `${match.awayTeam.name} 胜` :
-                         latestPrediction.mainDirection === "draw" ? "平局" : "方向待定")
-                      : clientPrediction?.mainDirection ?? "-"}
-                  </div>
-                </div>
-                <div className="rounded-lg border p-3 text-center">
-                  <div className="text-xs text-muted-foreground">置信度</div>
-                  <div className={`mt-1 inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                    confidenceColor(latestPrediction?.confidence ?? clientPrediction?.confidence ?? "low")
-                  }`}>
-                    {confidenceLabel[latestPrediction?.confidence ?? clientPrediction?.confidence ?? "low"] ?? "-"}
-                  </div>
-                </div>
-                <div className="rounded-lg border p-3 text-center">
-                  <div className="text-xs text-muted-foreground">风险等级</div>
-                  <div className="mt-1 flex justify-center">
-                    <RiskBadge level={latestPrediction?.riskLevel ?? null} />
-                  </div>
-                </div>
-                {clientPrediction && (
-                  <div className="rounded-lg border p-3 text-center">
-                    <div className="text-xs text-muted-foreground">冷门指数</div>
-                    <div className="mt-1 text-sm font-semibold">
-                      {clientPrediction.upsetIndex === "low" ? "低" : clientPrediction.upsetIndex === "medium" ? "中" : "高"}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* 摘要 */}
-              {latestPrediction?.reportText && (
-                <div className="rounded-lg bg-muted/50 p-4 text-sm leading-relaxed">
-                  {latestPrediction.reportText}
-                </div>
-              )}
-              {!latestPrediction && clientPrediction && (
-                <div className="rounded-lg bg-muted/50 p-4 text-sm leading-relaxed">
-                  {clientPrediction.summary}
+            <CardContent>
+              {!match.odds || match.odds.length === 0 ? (
+                <p className="text-sm text-muted-foreground">暂无赔率数据</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b text-left text-muted-foreground">
+                        <th className="pb-2 pr-4 font-medium">博彩公司</th>
+                        <th className="pb-2 pr-4 font-medium">主胜</th>
+                        <th className="pb-2 pr-4 font-medium">平局</th>
+                        <th className="pb-2 pr-4 font-medium">客胜</th>
+                        <th className="pb-2 pr-4 font-medium">主胜变化</th>
+                        <th className="pb-2 pr-4 font-medium">平局变化</th>
+                        <th className="pb-2 pr-4 font-medium">客胜变化</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(match.odds ?? []).map((o) => (
+                        <tr key={o.id} className="border-b last:border-0">
+                          <td className="py-2 pr-4">
+                            <span className="font-medium">{o.bookmaker}</span>
+                            {o.isMajorBookmaker && <Badge variant="secondary" className="ml-1 text-[10px]">主流</Badge>}
+                          </td>
+                          <td className={`py-2 pr-4 font-mono tabular-nums ${o.isAbnormal ? "text-red-600 font-bold" : ""}`}>{o.currentHomeWin.toFixed(2)}</td>
+                          <td className="py-2 pr-4 font-mono tabular-nums">{o.currentDraw.toFixed(2)}</td>
+                          <td className="py-2 pr-4 font-mono tabular-nums">{o.currentAwayWin.toFixed(2)}</td>
+                          <td className={`py-2 pr-4 font-mono tabular-nums ${(o.homeChange ?? 0) > 0 ? "text-green-600" : (o.homeChange ?? 0) < 0 ? "text-red-600" : ""}`}>
+                            {(o.homeChange ?? 0) > 0 ? "+" : ""}{(o.homeChange ?? 0).toFixed(2)}
+                          </td>
+                          <td className={`py-2 pr-4 font-mono tabular-nums ${(o.drawChange ?? 0) > 0 ? "text-green-600" : (o.drawChange ?? 0) < 0 ? "text-red-600" : ""}`}>
+                            {(o.drawChange ?? 0) > 0 ? "+" : ""}{(o.drawChange ?? 0).toFixed(2)}
+                          </td>
+                          <td className={`py-2 font-mono tabular-nums ${(o.awayChange ?? 0) > 0 ? "text-green-600" : (o.awayChange ?? 0) < 0 ? "text-red-600" : ""}`}>
+                            {(o.awayChange ?? 0) > 0 ? "+" : ""}{(o.awayChange ?? 0).toFixed(2)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
             </CardContent>
           </Card>
+        </TabsContent>
 
-          {/* Card 8: 风险原因卡 */}
+        {/* ===== Tab 3: 数据对比 ===== */}
+        <TabsContent value="compare" className="space-y-4">
+          {/* 球队对比卡 */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">
-                <ShieldAlert className="h-4 w-4 text-orange-500" />
-                风险提示
+                <Scale className="h-4 w-4" />
+                球队实力对比
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              {latestPrediction ? (
-                <ul className="space-y-1.5">
-                  {parseRiskReasons(latestPrediction.riskReasons).map((reason, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm">
-                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-orange-500" />
-                      <span className="text-muted-foreground">{reason}</span>
-                    </li>
-                  ))}
-                  {parseRiskReasons(latestPrediction.riskReasons).length === 0 && (
-                    <li className="text-sm text-muted-foreground">暂无明显的风险提示</li>
-                  )}
-                </ul>
-              ) : clientPrediction ? (
-                <ul className="space-y-1.5">
-                  {clientPrediction.riskPoints.map((point, i) => (
-                    <li key={i} className="flex items-start gap-2 text-sm">
-                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-orange-500" />
-                      <span className="text-muted-foreground">{point}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-muted-foreground">暂无数据</p>
+            <CardContent className="space-y-4">
+              {latestPrediction && (
+                <div>
+                  <div className="mb-1.5 flex justify-between text-xs text-muted-foreground">
+                    <span>{match.homeTeam.name}</span>
+                    <span className="font-semibold">
+                      {latestPrediction.homeBaseScore ?? "?"} : {latestPrediction.awayBaseScore ?? "?"}
+                    </span>
+                    <span>{match.awayTeam.name}</span>
+                  </div>
+                  <div className="flex h-3 w-full overflow-hidden rounded-full bg-muted">
+                    <div className="bg-amber-500 transition-all" style={{
+                      width: latestPrediction.homeBaseScore != null && latestPrediction.awayBaseScore != null
+                        ? `${(latestPrediction.homeBaseScore / (latestPrediction.homeBaseScore + latestPrediction.awayBaseScore)) * 100}%` : "50%"
+                    }} />
+                    <div className="bg-blue-500 transition-all" style={{
+                      width: latestPrediction.homeBaseScore != null && latestPrediction.awayBaseScore != null
+                        ? `${(latestPrediction.awayBaseScore / (latestPrediction.homeBaseScore + latestPrediction.awayBaseScore)) * 100}%` : "50%"
+                    }} />
+                  </div>
+                </div>
+              )}
+              {clientPrediction && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b text-left text-muted-foreground">
+                        <th className="px-4 py-3 font-medium">因素</th>
+                        <th className="px-4 py-3 font-medium text-right">{match.homeTeam.name}</th>
+                        <th className="px-4 py-3 font-medium text-center" />
+                        <th className="px-4 py-3 font-medium text-left">{match.awayTeam.name}</th>
+                        <th className="px-4 py-3 font-medium text-left hidden sm:table-cell">倾向</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {clientPrediction.factors.map((f) => (
+                        <tr key={f.label} className="border-b last:border-0 hover:bg-muted/30">
+                          <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">{f.label}</td>
+                          <td className={`px-4 py-3 text-right font-mono tabular-nums ${f.advantage === "home" ? "font-semibold text-amber-700 dark:text-amber-400" : ""}`}>{f.homeValue}</td>
+                          <td className="px-4 py-3 text-center">
+                            {f.advantage === "home" ? (
+                              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-amber-100 text-[10px] font-bold text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">H</span>
+                            ) : f.advantage === "away" ? (
+                              <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-blue-100 text-[10px] font-bold text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">A</span>
+                            ) : (
+                              <span className="text-muted-foreground text-[10px]">=</span>
+                            )}
+                          </td>
+                          <td className={`px-4 py-3 font-mono tabular-nums ${f.advantage === "away" ? "font-semibold text-blue-700 dark:text-blue-400" : ""}`}>{f.awayValue}</td>
+                          <td className="px-4 py-3 text-xs text-muted-foreground hidden sm:table-cell">{f.description}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {!clientPrediction && (
+                <p className="text-sm text-muted-foreground">球队详细数据加载中...</p>
               )}
             </CardContent>
           </Card>
 
-          {/* Card 9: 虚拟模拟卡 */}
-          <VirtualSimulation matchId={match.id} prediction={latestPrediction} />
-        </>
-      )}
+          {/* 交锋分析卡 */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <History className="h-4 w-4" />
+                历史交锋分析
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {h2hLoading ? (
+                <p className="text-sm text-muted-foreground">加载交锋数据...</p>
+              ) : h2hAnalysis ? (
+                <>
+                  <div className="grid grid-cols-3 gap-4 text-center">
+                    <div className="rounded-lg bg-amber-50 p-3 dark:bg-amber-950/20">
+                      <div className="text-xs text-muted-foreground">{match.homeTeam.name} 胜</div>
+                      <div className="mt-0.5 text-xl font-bold text-amber-700 dark:text-amber-400">{h2hAnalysis.homeWins}</div>
+                      <div className="text-xs text-muted-foreground">{h2hAnalysis.homeWinRate}%</div>
+                    </div>
+                    <div className="rounded-lg bg-yellow-50 p-3 dark:bg-yellow-950/20">
+                      <div className="text-xs text-muted-foreground">平局</div>
+                      <div className="mt-0.5 text-xl font-bold text-yellow-700 dark:text-yellow-400">{h2hAnalysis.draws}</div>
+                      <div className="text-xs text-muted-foreground">{h2hAnalysis.drawRate}%</div>
+                    </div>
+                    <div className="rounded-lg bg-blue-50 p-3 dark:bg-blue-950/20">
+                      <div className="text-xs text-muted-foreground">{match.awayTeam.name} 胜</div>
+                      <div className="mt-0.5 text-xl font-bold text-blue-700 dark:text-blue-400">{h2hAnalysis.awayWins}</div>
+                      <div className="text-xs text-muted-foreground">{h2hAnalysis.awayWinRate}%</div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <div className="rounded-lg border p-2.5 text-center">
+                      <div className="text-[10px] text-muted-foreground">总交锋</div>
+                      <div className="mt-0.5 text-base font-bold">{h2hAnalysis.totalMatches} 场</div>
+                    </div>
+                    <div className="rounded-lg border p-2.5 text-center">
+                      <div className="text-[10px] text-muted-foreground">场均总进球</div>
+                      <div className="mt-0.5 text-base font-bold">{h2hAnalysis.avgTotalGoals}</div>
+                    </div>
+                    <div className="rounded-lg border p-2.5 text-center">
+                      <div className="text-[10px] text-muted-foreground">双方进球率</div>
+                      <div className="mt-0.5 text-base font-bold">{h2hAnalysis.bothTeamsScoredRate}%</div>
+                    </div>
+                    <div className="rounded-lg border p-2.5 text-center">
+                      <div className="text-[10px] text-muted-foreground">样本</div>
+                      <div className="mt-0.5 text-base font-bold">{h2hAnalysis.recentForm}</div>
+                    </div>
+                  </div>
+                  {h2hAnalysis.commonScores.length > 0 && (
+                    <div>
+                      <div className="mb-2 text-xs font-medium text-muted-foreground">常见比分</div>
+                      <div className="flex flex-wrap gap-2">
+                        {h2hAnalysis.commonScores.map((s) => (
+                          <div key={s.score} className="rounded-md border bg-muted/30 px-2.5 py-1.5 text-center text-sm">
+                            <span className="font-mono font-bold tabular-nums">{s.score}</span>
+                            <span className="ml-1.5 text-xs text-muted-foreground">{s.count}次 ({s.percentage}%)</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="flex flex-col items-center gap-2 py-6">
+                  <History className="h-6 w-6 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">暂无历史交锋数据</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* 交锋记录表 */}
+          <HeadToHeadCard matchId={match.id} homeTeam={match.homeTeam} awayTeam={match.awayTeam} />
+        </TabsContent>
+
+        {/* ===== Tab 4: 复盘工具/总结 ===== */}
+        <TabsContent value="tools" className="space-y-4">
+          {isUpcoming && (
+            <VirtualSimulation matchId={match.id} prediction={latestPrediction} />
+          )}
+          {match.status === "completed" ? (
+            <ReviewDetailCard matchId={match.id} status={match.status} />
+          ) : (
+            <ReviewDetailCard matchId={match.id} status={match.status} />
+          )}
+        </TabsContent>
+      </Tabs>
 
       {/* 无预测时显示生成按钮 */}
       {isUpcoming && !latestPrediction && !clientPrediction && (
@@ -936,7 +1015,14 @@ export default function MatchDetailPage() {
         </Card>
       )}
 
-      {/* Card 10: 回顾成绩卡（已结束比赛） */}
+      {/* Card 10: 赛后比分录入（未结束的比赛） */}
+      {match.status !== "completed" && (
+        <ScoreEntryCard matchId={match.id} onResultSubmitted={() => {
+          fetch(`/api/matches/${params.id}`).then(r => r.json()).then(res => setMatch(res.data ?? null))
+        }} />
+      )}
+
+      {/* Card 11: 回顾成绩卡（已结束比赛） */}
       {match.status === "completed" && (
         <ReviewEntryCard matchId={match.id} />
       )}
@@ -1316,6 +1402,95 @@ function ReviewEntryCard({ matchId }: { matchId: string }) {
             </Button>
           </div>
         )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function ScoreEntryCard({ matchId, onResultSubmitted }: { matchId: string; onResultSubmitted: () => void }) {
+  const [homeScore, setHomeScore] = useState("")
+  const [awayScore, setAwayScore] = useState("")
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState("")
+
+  const handleSubmit = async () => {
+    const h = parseInt(homeScore)
+    const a = parseInt(awayScore)
+    if (isNaN(h) || isNaN(a) || h < 0 || a < 0) {
+      setError("请输入有效的比分")
+      return
+    }
+    setSubmitting(true)
+    setError("")
+    try {
+      const res = await fetch(`/api/matches/${matchId}/review`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ actualHomeScore: h, actualAwayScore: a }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        onResultSubmitted()
+      } else {
+        setError(data.error ?? "提交失败")
+      }
+    } catch {
+      setError("网络错误")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Card className="border-emerald-200 dark:border-emerald-800/30">
+      <CardHeader className="border-b border-emerald-100 dark:border-emerald-900/20">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <ClipboardCheck className="h-4 w-4 text-emerald-500" />
+          赛后比分录入
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="pt-5">
+        <div className="flex flex-col items-center gap-4">
+          <p className="text-sm text-muted-foreground text-center">
+            比赛已结束？录入实际比分后系统将自动标记为完成并生成复盘分析。
+          </p>
+          <div className="flex items-center gap-4">
+            <div className="flex flex-col items-center gap-1">
+              <label className="text-xs text-muted-foreground">主队</label>
+              <input
+                type="number"
+                min="0"
+                max="20"
+                value={homeScore}
+                onChange={(e) => setHomeScore(e.target.value)}
+                className="flex h-12 w-16 rounded-md border border-input bg-transparent text-center text-lg font-bold tabular-nums shadow-sm"
+                placeholder="0"
+              />
+            </div>
+            <span className="text-xl font-bold text-muted-foreground mt-6">:</span>
+            <div className="flex flex-col items-center gap-1">
+              <label className="text-xs text-muted-foreground">客队</label>
+              <input
+                type="number"
+                min="0"
+                max="20"
+                value={awayScore}
+                onChange={(e) => setAwayScore(e.target.value)}
+                className="flex h-12 w-16 rounded-md border border-input bg-transparent text-center text-lg font-bold tabular-nums shadow-sm"
+                placeholder="0"
+              />
+            </div>
+          </div>
+          {error && (
+            <p className="text-sm text-red-500">{error}</p>
+          )}
+          <Button onClick={handleSubmit} disabled={submitting}>
+            {submitting ? "提交中..." : "提交比分并生成复盘"}
+          </Button>
+          <div className="rounded-lg bg-emerald-50 p-3 text-xs text-emerald-800 dark:bg-emerald-950/20 dark:text-emerald-400 leading-relaxed">
+            提交后比赛状态将更新为"已结束"，系统会根据预测与实际结果的偏差自动生成复盘报告。
+          </div>
+        </div>
       </CardContent>
     </Card>
   )

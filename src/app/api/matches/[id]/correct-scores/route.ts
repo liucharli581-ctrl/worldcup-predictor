@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma"
 import { apiSuccess, apiError } from "@/lib/api-response"
 import { analyzeCorrectScores } from "@/lib/analysis"
 import { predictCorrectScores, type FusionResult } from "@/lib/correct-score-predictor"
+import { adjustTeamStatsByStrength } from "@/lib/poisson-model"
 import { fetchCorrectScoreOdds, isOddsApiConfigured } from "@/lib/odds-api"
 
 export async function GET(
@@ -18,10 +19,10 @@ export async function GET(
         homeTeamId: true,
         awayTeamId: true,
         homeTeam: {
-          select: { name: true, avgGoalsFor: true, avgGoalsAgainst: true },
+          select: { name: true, avgGoalsFor: true, avgGoalsAgainst: true, baseScore: true, fifaRanking: true },
         },
         awayTeam: {
-          select: { name: true, avgGoalsFor: true, avgGoalsAgainst: true },
+          select: { name: true, avgGoalsFor: true, avgGoalsAgainst: true, baseScore: true, fifaRanking: true },
         },
       },
     })
@@ -43,15 +44,24 @@ export async function GET(
     // 2. 泊松模型预测
     const home = match.homeTeam
     const away = match.awayTeam
-    const teamStatsHome = {
+    let teamStatsHome = {
       name: home.name,
       avgGoalsFor: home.avgGoalsFor ?? 1.5,
       avgGoalsAgainst: home.avgGoalsAgainst ?? 1.5,
     }
-    const teamStatsAway = {
+    let teamStatsAway = {
       name: away.name,
       avgGoalsFor: away.avgGoalsFor ?? 1.5,
       avgGoalsAgainst: away.avgGoalsAgainst ?? 1.5,
+    }
+
+    // 根据球队强度调整泊松模型输入，解决强弱队数据过于接近的问题
+    const homeStrength = home.baseScore ?? (home.fifaRanking ? Math.max(20, 100 - home.fifaRanking) : 50)
+    const awayStrength = away.baseScore ?? (away.fifaRanking ? Math.max(20, 100 - away.fifaRanking) : 50)
+    if (homeStrength !== awayStrength) {
+      const adjusted = adjustTeamStatsByStrength(teamStatsHome, teamStatsAway, homeStrength, awayStrength)
+      teamStatsHome = adjusted.home
+      teamStatsAway = adjusted.away
     }
 
     // 3. The Odds API 市场数据（可选，需配置 key）

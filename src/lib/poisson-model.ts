@@ -40,6 +40,40 @@ export interface ExpectedGoals {
 }
 
 /**
+ * 根据球队相对强度调整场均进球/失球
+ * 解决种子数据中强弱队场均数据过于接近的问题
+ * 使用 baseScore 或 FIFA 排名等强度指标来缩放
+ */
+export function adjustTeamStatsByStrength(
+  home: TeamStats,
+  away: TeamStats,
+  homeStrength: number,
+  awayStrength: number,
+): { home: TeamStats; away: TeamStats } {
+  const avg = (homeStrength + awayStrength) / 2
+  if (avg <= 0) return { home, away }
+
+  const homeRatio = homeStrength / avg
+  const awayRatio = awayStrength / avg
+
+  // 限制缩放范围 [0.5, 2.0]，避免极端值
+  const clamp = (v: number) => Math.max(0.5, Math.min(2, v))
+
+  return {
+    home: {
+      ...home,
+      avgGoalsFor: +(home.avgGoalsFor * clamp(homeRatio)).toFixed(2),
+      avgGoalsAgainst: +(home.avgGoalsAgainst / clamp(homeRatio)).toFixed(2),
+    },
+    away: {
+      ...away,
+      avgGoalsFor: +(away.avgGoalsFor * clamp(awayRatio)).toFixed(2),
+      avgGoalsAgainst: +(away.avgGoalsAgainst / clamp(awayRatio)).toFixed(2),
+    },
+  }
+}
+
+/**
  * 计算预期进球 (Expected Goals / λ)
  *
  * 使用标准足球 Poisson 模型方法：

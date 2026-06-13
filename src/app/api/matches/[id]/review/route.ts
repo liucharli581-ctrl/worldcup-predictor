@@ -41,12 +41,15 @@ export async function POST(
     const predictedResult = prediction.mainDirection
     const predictionHit = predictedResult === actualResult
 
-    const probError =
-      actualResult === "home_win"
-        ? Math.abs(prediction.homeWinProbability - 100)
-        : actualResult === "away_win"
-          ? Math.abs(prediction.awayWinProbability - 100)
-          : Math.abs(prediction.drawProbability - 100)
+    // Brier Score: Σ(f_t - o_t)², where f_t is predicted probability, o_t is actual outcome (one-hot)
+    const hp = prediction.homeWinProbability / 100
+    const dp = prediction.drawProbability / 100
+    const ap = prediction.awayWinProbability / 100
+    const ah = actualResult === "home_win" ? 1 : 0
+    const ad = actualResult === "draw" ? 1 : 0
+    const aa = actualResult === "away_win" ? 1 : 0
+    const brierScore = ((hp - ah) ** 2 + (dp - ad) ** 2 + (ap - aa) ** 2) * 100
+    const probError = Math.round(brierScore * 100) / 100
 
     const reviewSummary = predictionHit
       ? "模型方向正确，预测与实际结果一致。"

@@ -1,11 +1,11 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { TeamFlag } from "@/components/team-flag"
-import { Swords, Users, ClipboardCheck, TrendingUp, Calendar, Trophy, ChevronRight, BarChart3 } from "lucide-react"
+import { Swords, Users, TrendingUp, Calendar, Trophy, ChevronRight, BarChart3, CheckCircle2, PlayCircle, Radio } from "lucide-react"
 
 interface Team {
   id: string
@@ -13,7 +13,6 @@ interface Team {
   fifaCode: string
   country: string | null
   fifaRanking: number
-  eloRating: number
 }
 
 interface Match {
@@ -22,108 +21,115 @@ interface Match {
   matchStage: string
   matchDate: string
   status: string
-  homeTeam: { id: string; name: string; country: string | null }
-  awayTeam: { id: string; name: string; country: string | null }
-  homeScore?: number | null
-  awayScore?: number | null
+  homeTeam: { id: string; name: string; country: string | null; fifaCode?: string }
+  awayTeam: { id: string; name: string; country: string | null; fifaCode?: string }
+  actualHomeScore?: number | null
+  actualAwayScore?: number | null
+  actualResult?: string | null
+  predictions?: { mainDirection: string | null }[]
 }
 
-interface Review {
-  id: string
-  predictionHit: boolean
-  match: {
-    homeTeam: { name: string }
-    awayTeam: { name: string }
-  }
+// 格式化日期为 zh-CN 短格式
+function fmtDate(iso: string) {
+  const d = new Date(iso)
+  const month = d.getMonth() + 1
+  const day = d.getDate()
+  const hour = d.getHours().toString().padStart(2, "0")
+  const min = d.getMinutes().toString().padStart(2, "0")
+  return { date: `${month}月${day}日`, time: `${hour}:${min}` }
 }
 
-// 倒计时组件
-function Countdown({ targetDate }: { targetDate: Date }) {
-  const calc = useCallback(() => {
-    const now = new Date().getTime()
-    const diff = targetDate.getTime() - now
-    if (diff <= 0) return { days: 0, hours: 0, minutes: 0, seconds: 0 }
-    return {
-      days: Math.floor(diff / 86400000),
-      hours: Math.floor((diff % 86400000) / 3600000),
-      minutes: Math.floor((diff % 3600000) / 60000),
-      seconds: Math.floor((diff % 60000) / 1000),
-    }
-  }, [targetDate])
-
-  const [time, setTime] = useState(calc)
-
-  useEffect(() => {
-    const timer = setInterval(() => setTime(calc()), 1000)
-    return () => clearInterval(timer)
-  }, [calc])
-
-  const items = [
-    { value: time.days, label: "天" },
-    { value: time.hours, label: "时" },
-    { value: time.minutes, label: "分" },
-    { value: time.seconds, label: "秒" },
-  ]
-
-  return (
-    <div className="flex gap-3 sm:gap-4">
-      {items.map((item) => (
-        <div key={item.label} className="flex flex-col items-center">
-          <div className="flex h-12 w-12 sm:h-16 sm:w-16 items-center justify-center rounded-xl bg-primary text-lg sm:text-2xl font-bold text-primary-foreground tabular-nums">
-            {String(item.value).padStart(2, "0")}
-          </div>
-          <span className="mt-1 text-[10px] sm:text-xs text-muted-foreground">{item.label}</span>
-        </div>
-      ))}
-    </div>
-  )
+// 判断是否今天的比赛
+function isToday(iso: string) {
+  const d = new Date(iso)
+  const now = new Date()
+  return d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
 }
 
 export default function Dashboard() {
-  const [stats, setStats] = useState({ teams: 0, matches: 0, reviews: 0, hitRate: 0 })
+  const [stats, setStats] = useState({ teams: 0, matches: 0, scheduled: 0, completed: 0, reviews: 0, hitRate: 0 })
+  const [todayMatches, setTodayMatches] = useState<Match[]>([])
+  const [liveMatches, setLiveMatches] = useState<Match[]>([])
+  const [recentResults, setRecentResults] = useState<Match[]>([])
   const [upcomingMatches, setUpcomingMatches] = useState<Match[]>([])
   const [groups, setGroups] = useState<{ name: string; teams: Team[] }[]>([])
   const [loading, setLoading] = useState(true)
-  const [firstMatchDate, setFirstMatchDate] = useState<Date | null>(null)
 
   useEffect(() => {
     async function load() {
       try {
-        const [teamsRes, matchesRes, reviewsRes, groupsRes] = await Promise.all([
+        const now = new Date()
+        const todayStr = now.toISOString().slice(0, 10)
+        // 计算 3 天前的日期
+        const threeDaysAgo = new Date(now)
+        threeDaysAgo.setDate(threeDaysAgo.getDate() - 3)
+
+        const [teamsRes, matchesRes, reviewsRes, groupsRes, todayRes, completedRes, liveRes] = await Promise.all([
           fetch("/api/teams"),
           fetch("/api/matches"),
           fetch("/api/reviews"),
           fetch("/api/groups"),
+          fetch(`/api/matches?date=${todayStr}`),
+          fetch("/api/matches?status=completed"),
+          fetch("/api/matches?status=live"),
         ])
         const teams = await teamsRes.json()
         const matches = await matchesRes.json()
         const reviews = await reviewsRes.json()
         const groupsData = await groupsRes.json()
+        const todayData = await todayRes.json()
+        const completedData = await completedRes.json()
+        const liveData = await liveRes.json()
 
         const teamList: Team[] = teams.data ?? []
         const matchList: Match[] = (matches.data ?? []).sort(
           (a: Match, b: Match) => new Date(a.matchDate).getTime() - new Date(b.matchDate).getTime()
         )
-        const reviewList: Review[] = reviews.data ?? []
+        const reviewList = reviews.data ?? []
         const groupList = groupsData.data ?? []
 
-        const hits = reviewList.filter((r) => r.predictionHit).length
+        const todayList: Match[] = todayData.data ?? []
+        const completedList: Match[] = completedData.data ?? []
+
+        const hits = reviewList.filter((r: { predictionHit: boolean }) => r.predictionHit).length
         const hitRate = reviewList.length > 0 ? Math.round((hits / reviewList.length) * 100) : 0
+        const scheduledCount = matchList.filter((m) => m.status === "scheduled").length
+        const completedCount = matchList.filter((m) => m.status === "completed").length
 
         setStats({
           teams: teamList.length,
           matches: matchList.length,
+          scheduled: scheduledCount,
+          completed: completedCount,
           reviews: reviewList.length,
           hitRate,
         })
-        setUpcomingMatches(matchList.filter((m) => m.status === "scheduled").slice(0, 5))
-        setGroups(groupList)
 
-        // 第一场未开始的比赛作为倒计时
-        const firstUpcoming = matchList.find((m) => m.status === "scheduled")
-        if (firstUpcoming) setFirstMatchDate(new Date(firstUpcoming.matchDate))
-      } catch {
-        // ignore
+        // 今天的比赛（按时间排序）
+        const todaySorted = [...todayList].sort(
+          (a, b) => new Date(a.matchDate).getTime() - new Date(b.matchDate).getTime()
+        )
+        setTodayMatches(todaySorted)
+
+        // 进行中的比赛
+        const liveList: Match[] = liveData.data ?? []
+        setLiveMatches(liveList)
+
+        // 最近赛果（已完成比赛，最近 3 天，按时间倒序）
+        const recent = completedList
+          .filter((m: Match) => new Date(m.matchDate) >= threeDaysAgo)
+          .sort((a: Match, b: Match) => new Date(b.matchDate).getTime() - new Date(a.matchDate).getTime())
+        setRecentResults(recent.length > 0 ? recent.slice(0, 6) : completedList.slice(0, 6))
+
+        // 即将开赛（排除了今天的）
+        const up = matchList.filter((m) => m.status === "scheduled" && !isToday(m.matchDate)).slice(0, 5)
+        setUpcomingMatches(up)
+
+        setGroups(groupList)
+      } catch (e) {
+        console.error("Dashboard load error:", e)
       } finally {
         setLoading(false)
       }
@@ -149,8 +155,9 @@ export default function Dashboard() {
     )
   }
 
-  const completedCount = upcomingMatches.length > 0 ? 0 : 0 // placeholder
-  const scheduledCount = stats.matches // all 24 matches started as scheduled
+  const todayStr = new Date().toLocaleDateString("zh-CN", {
+    year: "numeric", month: "long", day: "numeric", weekday: "long",
+  })
 
   return (
     <div className="space-y-6">
@@ -160,21 +167,259 @@ export default function Dashboard() {
           <Trophy className="h-6 w-6 text-amber-500" />
           <h1 className="text-2xl font-bold tracking-tight">2026 世界杯</h1>
         </div>
-        <p className="text-muted-foreground">美国 · 加拿大 · 墨西哥 | 2026.06.11 - 07.19</p>
+        <div className="flex items-center gap-3">
+          <p className="text-muted-foreground">美国 · 加拿大 · 墨西哥 | 2026.06.11 - 07.19</p>
+          <span className="hidden sm:inline text-xs text-muted-foreground">·</span>
+          <span className="text-xs text-muted-foreground">{todayStr}</span>
+        </div>
       </div>
 
-      {/* 倒计时 */}
-      {firstMatchDate && (
-        <Card className="overflow-hidden border-amber-200 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 dark:border-amber-800/30">
-          <CardContent className="flex flex-col items-center gap-3 py-6">
-            <div className="flex items-center gap-2 text-sm font-medium text-amber-700 dark:text-amber-400">
-              <Calendar className="h-4 w-4" />
-              <span>距世界杯开幕</span>
+      {/* 最新赛果 —— 置顶展示 */}
+      <Card className="overflow-hidden border-green-200 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 dark:border-green-800/30">
+        <CardContent className="p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+            <h2 className="text-base font-semibold text-green-800 dark:text-green-300">最新赛果</h2>
+            {recentResults.length > 0 && (
+              <Badge variant="secondary" className="text-[10px]">{recentResults.length} 场</Badge>
+            )}
+          </div>
+
+          {recentResults.length === 0 ? (
+            <div className="rounded-xl border bg-white/40 p-6 text-center dark:bg-white/5">
+              <p className="text-sm text-muted-foreground">暂无已完成的比赛，首场比赛结束后将在这里展示赛果</p>
             </div>
-            <Countdown targetDate={firstMatchDate} />
+          ) : (
+            <>
+              {/* 最新一场 —— 大比分显示 */}
+              {(() => {
+                const latest = recentResults[0]
+                const ft = fmtDate(latest.matchDate)
+                const h = latest.actualHomeScore
+                const a = latest.actualAwayScore
+                const homeWon = h != null && a != null && h > a
+                const awayWon = a != null && h != null && a > h
+                const predicted = latest.predictions?.[0]?.mainDirection
+                const hit = predicted && latest.actualResult && predicted === latest.actualResult
+                return (
+                  <Link
+                    key={latest.id}
+                    href={`/matches/${latest.id}`}
+                    className="block rounded-xl border-2 border-green-300 bg-white/60 p-5 transition-all hover:shadow-lg hover:-translate-y-0.5 dark:border-green-700/30 dark:bg-white/5 mb-3"
+                  >
+                    <div className="text-center">
+                      <div className="flex items-center justify-center gap-6 sm:gap-10">
+                        <div className="flex flex-col items-center gap-1 sm:min-w-[120px]">
+                          <TeamFlag fifaCode={latest.homeTeam.fifaCode} country={latest.homeTeam.country} size={32} />
+                          <span className={`text-base font-semibold ${homeWon ? "text-foreground" : "text-muted-foreground"}`}>
+                            {latest.homeTeam.name}
+                          </span>
+                        </div>
+                        <div className="flex flex-col items-center">
+                          <span className="text-4xl sm:text-5xl font-extrabold tabular-nums tracking-tight">
+                            <span className={homeWon ? "text-green-700 dark:text-green-400" : "text-muted-foreground"}>{h ?? "?"}</span>
+                            <span className="text-muted-foreground/40 mx-2">:</span>
+                            <span className={awayWon ? "text-green-700 dark:text-green-400" : "text-muted-foreground"}>{a ?? "?"}</span>
+                          </span>
+                          <span className="text-xs text-muted-foreground mt-1">{ft.date} · {latest.matchStage}</span>
+                        </div>
+                        <div className="flex flex-col items-center gap-1 sm:min-w-[120px]">
+                          <TeamFlag fifaCode={latest.awayTeam.fifaCode} country={latest.awayTeam.country} size={32} />
+                          <span className={`text-base font-semibold ${awayWon ? "text-foreground" : "text-muted-foreground"}`}>
+                            {latest.awayTeam.name}
+                          </span>
+                        </div>
+                      </div>
+                      {hit != null && (
+                        <div className={`mt-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${
+                          hit
+                            ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                            : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+                        }`}>
+                          {hit ? "✓ 预测命中" : "✗ 预测偏差"}
+                        </div>
+                      )}
+                    </div>
+                  </Link>
+                )
+              })()}
+
+              {/* 其余赛果列表 */}
+              {recentResults.length > 1 && (
+                <div className="space-y-1.5">
+                  {recentResults.slice(1).map((m) => {
+                    const ft = fmtDate(m.matchDate)
+                    const h = m.actualHomeScore
+                    const a = m.actualAwayScore
+                    const homeWon = h != null && a != null && h > a
+                    const awayWon = a != null && h != null && a > h
+                    const predicted = m.predictions?.[0]?.mainDirection
+                    const hit = predicted && m.actualResult && predicted === m.actualResult
+                    return (
+                      <Link
+                        key={m.id}
+                        href={`/matches/${m.id}`}
+                        className="flex items-center justify-between rounded-lg border border-green-100 bg-white/40 p-3 transition-colors hover:bg-accent dark:border-green-900/20"
+                      >
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <TeamFlag fifaCode={m.homeTeam.fifaCode} country={m.homeTeam.country} size={18} />
+                          <span className={`text-sm ${homeWon ? "font-semibold" : "text-muted-foreground"}`}>
+                            {m.homeTeam.name}
+                          </span>
+                          <span className="text-sm font-bold tabular-nums">
+                            {h != null ? h : "?"} : {a != null ? a : "?"}
+                          </span>
+                          <span className={`text-sm ${awayWon ? "font-semibold" : "text-muted-foreground"}`}>
+                            {m.awayTeam.name}
+                          </span>
+                          <TeamFlag fifaCode={m.awayTeam.fifaCode} country={m.awayTeam.country} size={18} />
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0 ml-3">
+                          <span className="text-xs text-muted-foreground">{ft.date}</span>
+                          {hit != null && (
+                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                              hit
+                                ? "bg-green-100 text-green-700 dark:bg-green-950/20 dark:text-green-400"
+                                : "bg-red-100 text-red-700 dark:bg-red-950/20 dark:text-red-400"
+                            }`}>
+                              {hit ? "✓" : "✗"}
+                            </span>
+                          )}
+                          <Badge variant="outline" className="text-[10px]">{m.matchStage}</Badge>
+                        </div>
+                      </Link>
+                    )
+                  })}
+                </div>
+              )}
+
+              <div className="mt-3 text-center">
+                <Link href="/matches?status=completed" className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2">
+                  查看全部赛果 →
+                </Link>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 今日比赛高亮 */}
+      {todayMatches.length > 0 && (
+        <Card className="overflow-hidden border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 dark:border-blue-800/30">
+          <CardContent className="p-5">
+            <div className="flex items-center gap-2 mb-4">
+              <PlayCircle className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              <h2 className="text-base font-semibold text-blue-800 dark:text-blue-300">今日比赛</h2>
+              <Badge variant="secondary" className="text-[10px]">{todayMatches.length} 场</Badge>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {todayMatches.map((m) => {
+                const ft = fmtDate(m.matchDate)
+                const isFinished = m.status === "completed"
+                return (
+                  <Link
+                    key={m.id}
+                    href={`/matches/${m.id}`}
+                    className="flex items-center justify-between rounded-xl border bg-white/60 p-4 transition-all hover:shadow-md hover:-translate-y-0.5 dark:bg-white/5"
+                  >
+                    <div className="flex flex-1 items-center gap-3">
+                      <div className="flex flex-col items-end min-w-0">
+                        <span className="flex items-center gap-1.5 text-sm font-semibold">
+                          {m.homeTeam.name}
+                          <TeamFlag fifaCode={m.homeTeam.fifaCode} country={m.homeTeam.country} size={20} />
+                        </span>
+                      </div>
+                      <div className="flex flex-col items-center px-2">
+                        {isFinished ? (
+                          <span className="text-lg font-extrabold tabular-nums text-foreground">
+                            {m.actualHomeScore} : {m.actualAwayScore}
+                          </span>
+                        ) : (
+                          <>
+                            <span className="text-sm font-bold text-muted-foreground">VS</span>
+                            <span className="text-[10px] text-muted-foreground">{ft.time}</span>
+                          </>
+                        )}
+                        <span className="text-[10px] text-muted-foreground mt-0.5">{m.matchStage}</span>
+                      </div>
+                      <div className="flex flex-col items-start min-w-0">
+                        <span className="flex items-center gap-1.5 text-sm font-semibold">
+                          <TeamFlag fifaCode={m.awayTeam.fifaCode} country={m.awayTeam.country} size={20} />
+                          {m.awayTeam.name}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="ml-2 shrink-0">{statusBadge(m.status)}</div>
+                  </Link>
+                )
+              })}
+            </div>
           </CardContent>
         </Card>
       )}
+
+      {/* 进行中比赛 —— 无数据时显示空状态 */}
+      <Card className={`overflow-hidden ${
+        liveMatches.length > 0
+          ? "border-red-200 bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-950/20 dark:to-rose-950/20 dark:border-red-800/30"
+          : "border-muted"
+      }`}>
+        <CardContent className="p-5">
+          <div className="flex items-center gap-2 mb-4">
+            <Radio className={`h-5 w-5 ${liveMatches.length > 0 ? "text-red-600 dark:text-red-400 animate-pulse" : "text-muted-foreground"}`} />
+            <h2 className={`text-base font-semibold ${liveMatches.length > 0 ? "text-red-800 dark:text-red-300" : "text-muted-foreground"}`}>
+              进行中比赛
+            </h2>
+            {liveMatches.length > 0 && <Badge variant="destructive" className="text-[10px]">{liveMatches.length} 场</Badge>}
+          </div>
+          {liveMatches.length === 0 ? (
+            <div className="rounded-xl border bg-white/40 p-6 text-center dark:bg-white/5">
+              <p className="text-sm text-muted-foreground">当前没有正在进行中的比赛</p>
+              <p className="text-xs text-muted-foreground/60 mt-1">赛程开始后将自动更新</p>
+            </div>
+          ) : (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {liveMatches.map((m) => {
+                const ft = fmtDate(m.matchDate)
+                return (
+                  <Link
+                    key={m.id}
+                    href={`/matches/${m.id}`}
+                    className="flex items-center justify-between rounded-xl border bg-white/60 p-4 transition-all hover:shadow-md hover:-translate-y-0.5 dark:bg-white/5"
+                  >
+                    <div className="flex flex-1 items-center gap-3">
+                      <div className="flex flex-col items-end min-w-0">
+                        <span className="flex items-center gap-1.5 text-sm font-semibold">
+                          {m.homeTeam.name}
+                          <TeamFlag fifaCode={m.homeTeam.fifaCode} country={m.homeTeam.country} size={20} />
+                        </span>
+                      </div>
+                      <div className="flex flex-col items-center px-2">
+                        <span className="text-lg font-extrabold tabular-nums text-red-600 dark:text-red-400">
+                          {m.actualHomeScore ?? "?"} : {m.actualAwayScore ?? "?"}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">{m.matchStage}</span>
+                      </div>
+                      <div className="flex flex-col items-start min-w-0">
+                        <span className="flex items-center gap-1.5 text-sm font-semibold">
+                          <TeamFlag fifaCode={m.awayTeam.fifaCode} country={m.awayTeam.country} size={20} />
+                          {m.awayTeam.name}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="ml-2 shrink-0">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                        <span className="h-1.5 w-1.5 rounded-full bg-red-600 animate-pulse" />
+                        直播
+                      </span>
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* 数据卡片 */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -195,7 +440,11 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.matches}</div>
-            <p className="text-xs text-muted-foreground">已加载赛程数据</p>
+            <p className="text-xs text-muted-foreground">
+              {stats.completed > 0
+                ? <span>已完成 <span className="font-semibold text-green-600">{stats.completed}</span> 场 / 未开始 <span className="text-muted-foreground">{stats.scheduled}</span> 场</span>
+                : "已加载赛程数据"}
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -219,6 +468,7 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
 
       {/* 快速访问小组 */}
       <Card>
@@ -254,7 +504,7 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
-      {/* 近期比赛 + 快速操作 */}
+      {/* 即将开赛 + 快速操作 */}
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
           <CardHeader>
@@ -265,28 +515,32 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             {upcomingMatches.length === 0 ? (
-              <p className="text-sm text-muted-foreground">暂无比赛数据</p>
+              <p className="text-sm text-muted-foreground">暂无更多未开始比赛</p>
             ) : (
               <div className="space-y-2.5">
-                {upcomingMatches.map((m) => (
-                  <Link
-                    key={m.id}
-                    href={`/matches/${m.id}`}
-                    className="flex items-center justify-between rounded-lg border p-3 transition-colors hover:bg-accent"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="text-sm font-medium truncate">{m.homeTeam.name}</span>
-                      <span className="text-xs text-muted-foreground shrink-0">vs</span>
-                      <span className="text-sm font-medium truncate">{m.awayTeam.name}</span>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0 ml-3">
-                      <span className="text-xs text-muted-foreground tabular-nums">
-                        {new Date(m.matchDate).toLocaleDateString("zh-CN", { month: "short", day: "numeric" })}
-                      </span>
-                      {statusBadge(m.status)}
-                    </div>
-                  </Link>
-                ))}
+                {upcomingMatches.map((m) => {
+                  const ft = fmtDate(m.matchDate)
+                  return (
+                    <Link
+                      key={m.id}
+                      href={`/matches/${m.id}`}
+                      className="flex items-center justify-between rounded-lg border p-3 transition-colors hover:bg-accent"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-sm font-medium truncate">{m.homeTeam.name}</span>
+                        <span className="text-xs text-muted-foreground shrink-0">vs</span>
+                        <span className="text-sm font-medium truncate">{m.awayTeam.name}</span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0 ml-3">
+                        <div className="text-right">
+                          <div className="text-xs text-muted-foreground tabular-nums">{ft.date}</div>
+                          <div className="text-[10px] text-muted-foreground tabular-nums">{ft.time}</div>
+                        </div>
+                        {statusBadge(m.status)}
+                      </div>
+                    </Link>
+                  )
+                })}
               </div>
             )}
             {upcomingMatches.length > 0 && (

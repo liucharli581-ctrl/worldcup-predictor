@@ -162,8 +162,9 @@ export default function ReviewsPage() {
                   <AlertTriangle className="h-6 w-6 text-amber-700 dark:text-amber-300" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">平均概率误差</p>
-                  <p className="text-2xl font-bold">{stats.avgProbabilityError.toFixed(1)}%</p>
+                  <p className="text-sm text-muted-foreground">平均布莱尔评分</p>
+                  <p className="text-2xl font-bold">{stats.avgProbabilityError.toFixed(1)}</p>
+                  <p className="text-xs text-muted-foreground">0=完美 · 越小越好</p>
                 </div>
               </CardContent>
             </Card>
@@ -280,7 +281,7 @@ export default function ReviewsPage() {
                           <span>
                             预测: {resultLabel(r.predictedResult)} | 实际: {resultLabel(r.actualResult)}
                           </span>
-                          <span>概率误差: {r.probabilityError}%</span>
+                          <span>布莱尔评分: {r.probabilityError}</span>
                         </div>
                       </div>
                       <Badge variant={r.predictionHit ? "default" : "destructive"}>
