@@ -8,6 +8,7 @@ import {
   type OddsApiMatch,
 } from "./odds-api"
 import { generatePrediction } from "@/lib/prediction/generate-prediction"
+import { generateQwenPrediction } from "@/lib/prediction/qwen-prediction"
 
 /** 同步赔率数据：从 Odds API 抓取并更新到数据库 */
 export async function syncOddsData() {
@@ -157,6 +158,36 @@ export async function generateAllPredictions() {
         },
       })
       generated++
+
+      // 同时生成千问预测（独立的 Prediction 行）
+      const qwenResult = await generateQwenPrediction({
+        homeTeam: match.homeTeam,
+        awayTeam: match.awayTeam,
+        matchStage: match.matchStage,
+      })
+      if (qwenResult) {
+        const dir =
+          qwenResult.homeWinProbability > qwenResult.drawProbability &&
+          qwenResult.homeWinProbability > qwenResult.awayWinProbability
+            ? "home_win"
+            : qwenResult.awayWinProbability > qwenResult.homeWinProbability &&
+                qwenResult.awayWinProbability > qwenResult.drawProbability
+              ? "away_win"
+              : "draw"
+        await prisma.prediction.create({
+          data: {
+            matchId: match.id,
+            modelVersion: "qwen-v1",
+            homeWinProbability: qwenResult.homeWinProbability,
+            drawProbability: qwenResult.drawProbability,
+            awayWinProbability: qwenResult.awayWinProbability,
+            mainDirection: dir,
+            confidence: qwenResult.confidence,
+            reportText: qwenResult.analysis,
+          },
+        })
+        generated++
+      }
     } catch (e) {
       console.error(`[预测] ${match.homeTeam.name} vs ${match.awayTeam.name} 失败:`, e)
     }

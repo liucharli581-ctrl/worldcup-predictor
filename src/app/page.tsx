@@ -1,11 +1,11 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useCallback, useRef } from "react"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { TeamFlag } from "@/components/team-flag"
-import { Swords, Users, TrendingUp, Calendar, Trophy, ChevronRight, BarChart3, CheckCircle2, PlayCircle, Radio } from "lucide-react"
+import { RefreshCw, Swords, Users, TrendingUp, Calendar, Trophy, ChevronRight, BarChart3, CheckCircle2, PlayCircle, Radio } from "lucide-react"
 
 interface Team {
   id: string
@@ -56,6 +56,9 @@ export default function Dashboard() {
   const [upcomingMatches, setUpcomingMatches] = useState<Match[]>([])
   const [groups, setGroups] = useState<{ name: string; teams: Team[] }[]>([])
   const [loading, setLoading] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -128,6 +131,7 @@ export default function Dashboard() {
         setUpcomingMatches(up)
 
         setGroups(groupList)
+        setLastUpdated(new Date())
       } catch (e) {
         console.error("Dashboard load error:", e)
       } finally {
@@ -136,6 +140,58 @@ export default function Dashboard() {
     }
     load()
   }, [])
+
+  // 轮询：每 30 秒刷新进行中比赛和最新赛果
+  const pollLiveData = useCallback(async () => {
+    try {
+      const now = new Date()
+      const threeDaysAgo = new Date(now)
+      threeDaysAgo.setDate(threeDaysAgo.getDate() - 3)
+
+      const [completedRes, liveRes] = await Promise.all([
+        fetch("/api/matches?status=completed"),
+        fetch("/api/matches?status=live"),
+      ])
+      const completedData = await completedRes.json()
+      const liveData = await liveRes.json()
+
+      const completedList: Match[] = completedData.data ?? []
+      const liveList: Match[] = liveData.data ?? []
+
+      setLiveMatches(liveList)
+
+      const recent = completedList
+        .filter((m: Match) => new Date(m.matchDate) >= threeDaysAgo)
+        .sort((a: Match, b: Match) => new Date(b.matchDate).getTime() - new Date(a.matchDate).getTime())
+      setRecentResults(recent.length > 0 ? recent.slice(0, 6) : completedList.slice(0, 6))
+
+      setLastUpdated(new Date())
+    } catch (e) {
+      console.error("轮询错误:", e)
+    }
+  }, [])
+
+  // 自动轮询：30 秒间隔
+  useEffect(() => {
+    pollRef.current = setInterval(pollLiveData, 30000)
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current)
+    }
+  }, [pollLiveData])
+
+  // 手动刷新（触发后台同步后重载页面）
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true)
+    try {
+      await fetch("/api/admin/refresh-data", { method: "POST" })
+      await pollLiveData()
+      window.location.reload()
+    } catch (e) {
+      console.error("刷新错误:", e)
+    } finally {
+      setIsRefreshing(false)
+    }
+  }, [pollLiveData])
 
   const statusBadge = (status: string) => {
     const map: Record<string, { label: string; variant: "default" | "secondary" | "outline" | "destructive" }> = {
@@ -162,15 +218,32 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       {/* 标题区域 */}
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center gap-2">
-          <Trophy className="h-6 w-6 text-amber-500" />
-          <h1 className="text-2xl font-bold tracking-tight">2026 世界杯</h1>
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <Trophy className="h-6 w-6 text-amber-500" />
+            <h1 className="text-2xl font-bold tracking-tight">2026 世界杯</h1>
+          </div>
+          <div className="flex items-center gap-3">
+            <p className="text-muted-foreground">美国 · 加拿大 · 墨西哥 | 2026.06.11 - 07.19</p>
+            <span className="hidden sm:inline text-xs text-muted-foreground">·</span>
+            <span className="text-xs text-muted-foreground">{todayStr}</span>
+          </div>
         </div>
-        <div className="flex items-center gap-3">
-          <p className="text-muted-foreground">美国 · 加拿大 · 墨西哥 | 2026.06.11 - 07.19</p>
-          <span className="hidden sm:inline text-xs text-muted-foreground">·</span>
-          <span className="text-xs text-muted-foreground">{todayStr}</span>
+        <div className="flex flex-col items-end gap-1 shrink-0">
+          <button
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="inline-flex items-center gap-1.5 rounded-lg border bg-background px-3 py-1.5 text-xs font-medium transition-colors hover:bg-accent disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+            {isRefreshing ? "刷新中..." : "刷新数据"}
+          </button>
+          {lastUpdated && (
+            <span className="text-[10px] text-muted-foreground tabular-nums">
+              {lastUpdated.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" })} 更新
+            </span>
+          )}
         </div>
       </div>
 
