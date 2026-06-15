@@ -46,7 +46,8 @@ export interface OddsApiMatch {
 }
 
 async function request<T>(path: string): Promise<T> {
-  const url = `${BASE}${path}&apiKey=${API_KEY}`
+  const separator = path.includes("?") ? "&" : "?"
+  const url = `${BASE}${path}${separator}apiKey=${API_KEY}`
   const res = await fetch(url)
   if (!res.ok) {
     const text = await res.text()
