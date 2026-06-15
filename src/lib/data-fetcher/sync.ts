@@ -79,7 +79,7 @@ export async function syncResults() {
   const sportKey = await findWorldCupSportKey()
   if (!sportKey) throw new Error("未找到世界杯赛事")
 
-  const scores = await fetchScores(sportKey, 7)
+  const scores = await fetchScores(sportKey, 3)
   let updated = 0
 
   for (const apiMatch of scores) {

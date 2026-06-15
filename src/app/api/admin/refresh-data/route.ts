@@ -5,6 +5,13 @@ export async function POST() {
   const start = Date.now()
   const results: Record<string, unknown> = {}
 
+  // 诊断：检查关键环境变量是否存在
+  results._diagnostics = {
+    DASHSCOPE_API_KEY: !!process.env.DASHSCOPE_API_KEY,
+    OOKOO_ODDS_API_KEY: !!process.env.OOKOO_ODDS_API_KEY,
+    NODE_ENV: process.env.NODE_ENV,
+  }
+
   try {
     const oddsResult = await syncOddsData()
     results.odds = oddsResult
