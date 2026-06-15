@@ -134,59 +134,64 @@ export async function generateAllPredictions() {
 
   let generated = 0
   for (const match of matches) {
-    // 如果已有预测且在高置信度以上，跳过
     const existing = match.predictions[0]
-    if (existing && existing.confidence === "high") continue
+    const skipPoisson = existing?.modelVersion === "v1" && existing.confidence === "high"
+    const skipQwen = existing?.modelVersion === "qwen-v1" && existing.confidence === "high"
 
     try {
-      const prediction = await generatePrediction(match)
-      await prisma.prediction.create({
-        data: {
-          matchId: match.id,
-          modelVersion: prediction.modelVersion,
-          homeBaseScore: prediction.homeBaseScore,
-          awayBaseScore: prediction.awayBaseScore,
-          marketScore: prediction.marketScore,
-          homeWinProbability: prediction.homeWinProbability,
-          drawProbability: prediction.drawProbability,
-          awayWinProbability: prediction.awayWinProbability,
-          mainDirection: prediction.mainDirection,
-          confidence: prediction.confidence,
-          riskLevel: prediction.riskLevel,
-          riskReasons: JSON.stringify(prediction.riskReasons),
-          reportText: prediction.reportText,
-        },
-      })
-      generated++
-
-      // 同时生成千问预测（独立的 Prediction 行）
-      const qwenResult = await generateQwenPrediction({
-        homeTeam: match.homeTeam,
-        awayTeam: match.awayTeam,
-        matchStage: match.matchStage,
-      })
-      if (qwenResult) {
-        const dir =
-          qwenResult.homeWinProbability > qwenResult.drawProbability &&
-          qwenResult.homeWinProbability > qwenResult.awayWinProbability
-            ? "home_win"
-            : qwenResult.awayWinProbability > qwenResult.homeWinProbability &&
-                qwenResult.awayWinProbability > qwenResult.drawProbability
-              ? "away_win"
-              : "draw"
+      // 泊松预测：已有高置信度则跳过
+      if (!skipPoisson) {
+        const prediction = await generatePrediction(match)
         await prisma.prediction.create({
           data: {
             matchId: match.id,
-            modelVersion: "qwen-v1",
-            homeWinProbability: qwenResult.homeWinProbability,
-            drawProbability: qwenResult.drawProbability,
-            awayWinProbability: qwenResult.awayWinProbability,
-            mainDirection: dir,
-            confidence: qwenResult.confidence,
-            reportText: qwenResult.analysis,
+            modelVersion: prediction.modelVersion,
+            homeBaseScore: prediction.homeBaseScore,
+            awayBaseScore: prediction.awayBaseScore,
+            marketScore: prediction.marketScore,
+            homeWinProbability: prediction.homeWinProbability,
+            drawProbability: prediction.drawProbability,
+            awayWinProbability: prediction.awayWinProbability,
+            mainDirection: prediction.mainDirection,
+            confidence: prediction.confidence,
+            riskLevel: prediction.riskLevel,
+            riskReasons: JSON.stringify(prediction.riskReasons),
+            reportText: prediction.reportText,
           },
         })
         generated++
+      }
+
+      // 千问预测：始终尝试生成（除非已有高置信度千问预测）
+      if (!skipQwen) {
+        const qwenResult = await generateQwenPrediction({
+          homeTeam: match.homeTeam,
+          awayTeam: match.awayTeam,
+          matchStage: match.matchStage,
+        })
+        if (qwenResult) {
+          const dir =
+            qwenResult.homeWinProbability > qwenResult.drawProbability &&
+            qwenResult.homeWinProbability > qwenResult.awayWinProbability
+              ? "home_win"
+              : qwenResult.awayWinProbability > qwenResult.homeWinProbability &&
+                  qwenResult.awayWinProbability > qwenResult.drawProbability
+                ? "away_win"
+                : "draw"
+          await prisma.prediction.create({
+            data: {
+              matchId: match.id,
+              modelVersion: "qwen-v1",
+              homeWinProbability: qwenResult.homeWinProbability,
+              drawProbability: qwenResult.drawProbability,
+              awayWinProbability: qwenResult.awayWinProbability,
+              mainDirection: dir,
+              confidence: qwenResult.confidence,
+              reportText: qwenResult.analysis,
+            },
+          })
+          generated++
+        }
       }
     } catch (e) {
       console.error(`[预测] ${match.homeTeam.name} vs ${match.awayTeam.name} 失败:`, e)
