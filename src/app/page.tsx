@@ -376,6 +376,40 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
+      {/* 快速访问小组 */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Trophy className="h-4 w-4 text-amber-500" />
+            小组概览
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {groups.map((g) => (
+              <Link
+                key={g.name}
+                href={`/groups/${g.name}`}
+                className="rounded-lg border p-3 transition-all hover:shadow-md hover:-translate-y-0.5"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-semibold">{g.name}组</span>
+                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                </div>
+                <div className="space-y-1">
+                  {g.teams.slice(0, 4).map((t) => (
+                    <div key={t.id} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <TeamFlag fifaCode={t.fifaCode} country={t.country} size={20} />
+                      <span className="truncate">{t.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </Link>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* 今日比赛高亮 */}
       {todayMatches.length > 0 && (
         <Card className="overflow-hidden border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 dark:border-blue-800/30">
@@ -541,41 +575,6 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
-
-
-      {/* 快速访问小组 */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Trophy className="h-4 w-4 text-amber-500" />
-            小组概览
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {groups.map((g) => (
-              <Link
-                key={g.name}
-                href={`/groups/${g.name}`}
-                className="rounded-lg border p-3 transition-all hover:shadow-md hover:-translate-y-0.5"
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-semibold">{g.name}组</span>
-                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-                </div>
-                <div className="space-y-1">
-                  {g.teams.slice(0, 4).map((t) => (
-                    <div key={t.id} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <TeamFlag fifaCode={t.fifaCode} country={t.country} size={20} />
-                      <span className="truncate">{t.name}</span>
-                    </div>
-                  ))}
-                </div>
-              </Link>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
 
       {/* 即将开赛 + 快速操作 */}
       <div className="grid gap-6 lg:grid-cols-2">
